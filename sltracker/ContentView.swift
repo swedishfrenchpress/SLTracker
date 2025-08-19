@@ -126,12 +126,7 @@ struct ContentView: View {
                     .zIndex(1)
             }
             
-            // Dropdown Overlay (highest layer)
-            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading && !isSearchMode {
-                dropdownOverlay
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                    .zIndex(1000)
-            }
+            // No more overlay - dropdown is now part of natural flow
         }
         .animation(.easeInOut(duration: 0.35), value: isSearchMode)
         .animation(.easeInOut(duration: 0.25), value: showingSuggestions)
@@ -163,6 +158,12 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 // Search Section
                 searchBarSection
+                
+                // Dropdown - now part of natural flow
+                if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+                    dropdownView
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
+                }
                 
                 // Content Section
                 VStack {
@@ -477,67 +478,56 @@ struct ContentView: View {
             .padding(.bottom, 20)
     }
     
-    /// Dropdown overlay that doesn't affect layout - enhanced with Macadamia-style transitions
-    private var dropdownOverlay: some View {
-        GeometryReader { geometry in
-            VStack {
-                // Calculate position based on search bar location - much closer to search field
-                let searchBarTopPadding: CGFloat = isSearchMode ? 60 : 120
-                
-                VStack(spacing: 0) {
-                    ForEach(Array(filteredStations.enumerated()), id: \.element) { index, station in
-                        Button(action: {
-                            // Add haptic feedback for better UX
-                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                            impactFeedback.impactOccurred()
-                            
-                            selectStation(station)
-                        }) {
-                            HStack(spacing: 12) {
-                                Image(systemName: "tram.fill")
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 14, weight: .medium))
-                                
-                                Text(station)
-                                    .foregroundColor(.primary)
-                                    .font(.system(size: 16))
-                                
-                                Spacer()
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(Color.clear)
-                                    .animation(.easeInOut(duration: 0.15), value: isSearchFocused)
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        // Staggered animation for each item
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .top)).animation(.easeInOut(duration: 0.2).delay(Double(index) * 0.03)),
-                            removal: .opacity.animation(.easeInOut(duration: 0.15))
-                        ))
+    /// Dropdown view that follows SwiftUI's natural layout
+    private var dropdownView: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(filteredStations.enumerated()), id: \.element) { index, station in
+                Button(action: {
+                    // Add haptic feedback for better UX
+                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                    impactFeedback.impactOccurred()
+                    
+                    selectStation(station)
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "tram.fill")
+                            .foregroundColor(.blue)
+                            .font(.system(size: 14, weight: .medium))
                         
-                        if station != filteredStations.last {
-                            Divider()
-                                .padding(.leading, 44)
-                        }
+                        Text(station)
+                            .foregroundColor(.primary)
+                            .font(.system(size: 16))
+                        
+                        Spacer()
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.clear)
+                            .animation(.easeInOut(duration: 0.15), value: isSearchFocused)
+                    )
                 }
-                .background(Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
-                .padding(.horizontal, 32)
-                .padding(.top, searchBarTopPadding)
-                .scaleEffect(showingSuggestions ? 1.0 : 0.95)
+                .buttonStyle(PlainButtonStyle())
+                // Staggered animation for each item
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)).animation(.easeInOut(duration: 0.2).delay(Double(index) * 0.03)),
+                    removal: .opacity.animation(.easeInOut(duration: 0.15))
+                ))
                 
-                Spacer()
+                if station != filteredStations.last {
+                    Divider()
+                        .padding(.leading, 44)
+                }
             }
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
-        .zIndex(1000)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
+        .padding(.horizontal, 32)
+        .padding(.top, 8) // Natural spacing following Apple guidelines
+        .scaleEffect(showingSuggestions ? 1.0 : 0.95)
     }
     
     // MARK: - Actions
