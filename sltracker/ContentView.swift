@@ -188,19 +188,37 @@ struct ContentView: View {
     
     /// Search results view with custom navigation
     private var searchResultsView: some View {
-        VStack(spacing: 0) {
-            // Custom navigation bar
-            customNavigationBar
+        ZStack {
+            // Main content
+            VStack(spacing: 0) {
+                // Custom navigation bar
+                customNavigationBar
+                
+                // Search Section
+                searchBarSection
+                
+                // Content Section  
+                contentSection
+                
+                Spacer()
+            }
+            .padding(.horizontal)
             
-            // Search Section
-            searchBarSection
-            
-            // Content Section  
-            contentSection
-            
-            Spacer()
+            // Dropdown overlay for search mode - appears above content
+            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+                VStack(spacing: 0) {
+                    // Position dropdown directly below search bar with minimal gap
+                    Spacer()
+                        .frame(height: 110) // Reduced to eliminate visible gap
+                    
+                    dropdownView
+                    
+                    Spacer() // Push content down if needed
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
+                .zIndex(1000)
+            }
         }
-        .padding(.horizontal)
     }
     
     /// Custom navigation bar for search mode
@@ -526,7 +544,6 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
         .padding(.horizontal, 32)
-        .padding(.top, 8) // Natural spacing following Apple guidelines
         .scaleEffect(showingSuggestions ? 1.0 : 0.95)
     }
     
