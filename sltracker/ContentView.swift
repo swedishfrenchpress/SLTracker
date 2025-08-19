@@ -152,18 +152,16 @@ struct ContentView: View {
     
     // MARK: - View Components
     
-    /// Home screen view with navigation-style header
+    /// Home screen view with custom header and overlay dropdown
     private var homeScreenView: some View {
-        NavigationView {
+        ZStack {
+            // Main content
             VStack(spacing: 0) {
+                // Custom header (instead of NavigationView)
+                homeScreenHeader
+                
                 // Search Section
                 searchBarSection
-                
-                // Dropdown - now part of natural flow
-                if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
-                    dropdownView
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
-                }
                 
                 // Content Section
                 VStack {
@@ -181,44 +179,65 @@ struct ContentView: View {
                 footerSection
             }
             .padding(.horizontal)
-            .navigationTitle("SL Tracker")
-            .navigationBarTitleDisplayMode(.large)
+            
+            // Dropdown overlay that appears above content
+            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+                VStack(spacing: 0) {
+                    // Position dropdown right below search bar
+                    Spacer()
+                        .frame(height: 140) // Account for header + search bar + spacing
+                    
+                    dropdownView
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
+                    
+                    Spacer() // Push content down if needed
+                }
+                .zIndex(1000)
+            }
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
     
     /// Search results view with custom navigation
     private var searchResultsView: some View {
-        ZStack {
-            // Main content
+        VStack(spacing: 0) {
+            // Custom navigation bar
+            customNavigationBar
+            
+            // Search Section with integrated dropdown
             VStack(spacing: 0) {
-                // Custom navigation bar
-                customNavigationBar
-                
-                // Search Section
                 searchBarSection
                 
-                // Content Section  
-                contentSection
-                
-                Spacer()
-            }
-            .padding(.horizontal)
-            
-            // Dropdown overlay for search mode - appears above content
-            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
-                VStack(spacing: 0) {
-                    // Position dropdown directly below search bar with minimal gap
-                    Spacer()
-                        .frame(height: 110) // Reduced to eliminate visible gap
-                    
+                // Dropdown appears naturally in the flow when typing
+                if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
                     dropdownView
-                    
-                    Spacer() // Push content down if needed
+                        .padding(.top, 8) // Natural spacing
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
-                .zIndex(1000)
             }
+            
+            // Content Section  
+            contentSection
+            
+            Spacer()
         }
+        .padding(.horizontal)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+    
+    /// Custom header for home screen (replaces NavigationView)
+    private var homeScreenHeader: some View {
+        HStack {
+            Text("SL Tracker")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
     
     /// Custom navigation bar for search mode
