@@ -7,6 +7,22 @@
 
 import SwiftUI
 
+// MARK: - Preference Keys for Dynamic Layout
+
+struct HeaderHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+struct SearchBarHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct ContentView: View {
     
     // MARK: - Properties
@@ -37,6 +53,10 @@ struct ContentView: View {
     
     /// Animation state for smooth transitions
     @State private var searchBarOffset: CGFloat = 0
+    
+    /// Dynamic layout measurements for responsive positioning
+    @State private var headerHeight: CGFloat = 0
+    @State private var searchBarHeight: CGFloat = 0
     
     /// All available Stockholm Metro stations
     private let allStations = [
@@ -152,48 +172,69 @@ struct ContentView: View {
     
     // MARK: - View Components
     
-    /// Home screen view with custom header and overlay dropdown
+    /// Home screen view with custom header and dynamic dropdown positioning
     private var homeScreenView: some View {
-        ZStack {
-            // Main content
-            VStack(spacing: 0) {
-                // Custom header (instead of NavigationView)
-                homeScreenHeader
-                
-                // Search Section
-                searchBarSection
-                
-                // Content Section
-                VStack {
-                    if !viewModel.departures.isEmpty {
-                        departuresList
-                    } else {
-                        initialView
-                    }
-                }
-                .padding(.top, 32)
-                
-                Spacer()
-                
-                // Footer
-                footerSection
-            }
-            .padding(.horizontal)
-            
-            // Dropdown overlay that appears above content
-            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                // Main content
                 VStack(spacing: 0) {
-                    // Position dropdown right below search bar
+                    // Custom header (instead of NavigationView)
+                    homeScreenHeader
+                        .background(
+                            GeometryReader { headerGeometry in
+                                Color.clear.preference(key: HeaderHeightPreferenceKey.self, value: headerGeometry.size.height)
+                            }
+                        )
+                    
+                    // Search Section
+                    searchBarSection
+                        .background(
+                            GeometryReader { searchGeometry in
+                                Color.clear.preference(key: SearchBarHeightPreferenceKey.self, value: searchGeometry.size.height)
+                            }
+                        )
+                    
+                    // Content Section
+                    VStack {
+                        if !viewModel.departures.isEmpty {
+                            departuresList
+                        } else {
+                            initialView
+                        }
+                    }
+                    .padding(.top, 32)
+                    
                     Spacer()
-                        .frame(height: 140) // Account for header + search bar + spacing
                     
-                    dropdownView
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
-                    
-                    Spacer() // Push content down if needed
+                    // Footer
+                    footerSection
                 }
-                .zIndex(1000)
+                .padding(.horizontal)
+                
+                // Dynamic dropdown overlay
+                if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+                    VStack(spacing: 0) {
+                        // Dynamic positioning with fallback values for initial state
+                        let calculatedHeight = max(headerHeight + searchBarHeight + 8, 120) // Fallback to 120 if measurements not ready
+                        Spacer()
+                            .frame(height: calculatedHeight)
+                        
+                        dropdownView
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
+                        
+                        Spacer()
+                    }
+                    .zIndex(1000)
+                }
             }
+        }
+        .onPreferenceChange(HeaderHeightPreferenceKey.self) { height in
+            print("Header height measured: \(height)")
+            headerHeight = height
+        }
+        .onPreferenceChange(SearchBarHeightPreferenceKey.self) { height in
+            print("Search bar height measured: \(height)")
+            searchBarHeight = height
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
@@ -319,16 +360,7 @@ struct ContentView: View {
                     .stroke(isSearchFocused ? Color.blue : (isSearchMode ? Color(.systemGray4) : Color.clear), lineWidth: isSearchMode ? 1 : 1.5)
             )
             
-            // Helper text
-            if !isSearchMode {
-                HStack {
-                    Text("Enter a station name to see upcoming departures")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal)
-            }
+            // Helper text removed - redundant with search field placeholder
         }
         .padding(.horizontal)
         .padding(.top, isSearchMode ? 8 : 0)
