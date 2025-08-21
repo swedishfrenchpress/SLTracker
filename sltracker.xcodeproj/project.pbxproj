@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		03B468FB2E57C5BF004BF600 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03B468FA2E57C5BF004BF600 /* WidgetKit.framework */; };
+		03B468FD2E57C5BF004BF600 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 03B468FC2E57C5BF004BF600 /* SwiftUI.framework */; };
+		03B4690E2E57C5C0004BF600 /* SLTrackerWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 03B468F82E57C5BF004BF600 /* SLTrackerWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		031B760E2E528DE5008A9AE8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +27,38 @@
 			remoteGlobalIDString = 031B75FF2E528DE3008A9AE8;
 			remoteInfo = sltracker;
 		};
+		03B4690C2E57C5C0004BF600 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 031B75F82E528DE3008A9AE8 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 03B468F72E57C5BF004BF600;
+			remoteInfo = SLTrackerWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		03B469132E57C5C0004BF600 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				03B4690E2E57C5C0004BF600 /* SLTrackerWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		031B76002E528DE3008A9AE8 /* sltracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = sltracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		031B760D2E528DE5008A9AE8 /* sltrackerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = sltrackerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		031B76172E528DE5008A9AE8 /* sltrackerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = sltrackerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		03B468F82E57C5BF004BF600 /* SLTrackerWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SLTrackerWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		03B468FA2E57C5BF004BF600 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		03B468FC2E57C5BF004BF600 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		03B4691F2E57D04E004BF600 /* SLTrackerWidgetExtension-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "SLTrackerWidgetExtension-Info.plist"; sourceTree = "<group>"; };
+		03B469212E57D673004BF600 /* SLTrackerWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SLTrackerWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -43,6 +75,11 @@
 		031B761A2E528DE5008A9AE8 /* sltrackerUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = sltrackerUITests;
+			sourceTree = "<group>";
+		};
+		03B468FE2E57C5BF004BF600 /* SLTrackerWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SLTrackerWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,15 +106,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		03B468F52E57C5BF004BF600 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				03B468FD2E57C5BF004BF600 /* SwiftUI.framework in Frameworks */,
+				03B468FB2E57C5BF004BF600 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		031B75F72E528DE3008A9AE8 = {
 			isa = PBXGroup;
 			children = (
+				03B469212E57D673004BF600 /* SLTrackerWidgetExtension.entitlements */,
+				03B4691F2E57D04E004BF600 /* SLTrackerWidgetExtension-Info.plist */,
 				031B76022E528DE3008A9AE8 /* sltracker */,
 				031B76102E528DE5008A9AE8 /* sltrackerTests */,
 				031B761A2E528DE5008A9AE8 /* sltrackerUITests */,
+				03B468FE2E57C5BF004BF600 /* SLTrackerWidget */,
+				03B468F92E57C5BF004BF600 /* Frameworks */,
 				031B76012E528DE3008A9AE8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,8 +138,18 @@
 				031B76002E528DE3008A9AE8 /* sltracker.app */,
 				031B760D2E528DE5008A9AE8 /* sltrackerTests.xctest */,
 				031B76172E528DE5008A9AE8 /* sltrackerUITests.xctest */,
+				03B468F82E57C5BF004BF600 /* SLTrackerWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		03B468F92E57C5BF004BF600 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				03B468FA2E57C5BF004BF600 /* WidgetKit.framework */,
+				03B468FC2E57C5BF004BF600 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -102,10 +162,12 @@
 				031B75FC2E528DE3008A9AE8 /* Sources */,
 				031B75FD2E528DE3008A9AE8 /* Frameworks */,
 				031B75FE2E528DE3008A9AE8 /* Resources */,
+				03B469132E57C5C0004BF600 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				03B4690D2E57C5C0004BF600 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				031B76022E528DE3008A9AE8 /* sltracker */,
@@ -163,6 +225,28 @@
 			productReference = 031B76172E528DE5008A9AE8 /* sltrackerUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		03B468F72E57C5BF004BF600 /* SLTrackerWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 03B469102E57C5C0004BF600 /* Build configuration list for PBXNativeTarget "SLTrackerWidgetExtension" */;
+			buildPhases = (
+				03B468F42E57C5BF004BF600 /* Sources */,
+				03B468F52E57C5BF004BF600 /* Frameworks */,
+				03B468F62E57C5BF004BF600 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				03B468FE2E57C5BF004BF600 /* SLTrackerWidget */,
+			);
+			name = SLTrackerWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = SLTrackerWidgetExtension;
+			productReference = 03B468F82E57C5BF004BF600 /* SLTrackerWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +268,9 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = 031B75FF2E528DE3008A9AE8;
 					};
+					03B468F72E57C5BF004BF600 = {
+						CreatedOnToolsVersion = 16.4;
+					};
 				};
 			};
 			buildConfigurationList = 031B75FB2E528DE3008A9AE8 /* Build configuration list for PBXProject "sltracker" */;
@@ -203,6 +290,7 @@
 				031B75FF2E528DE3008A9AE8 /* sltracker */,
 				031B760C2E528DE5008A9AE8 /* sltrackerTests */,
 				031B76162E528DE5008A9AE8 /* sltrackerUITests */,
+				03B468F72E57C5BF004BF600 /* SLTrackerWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +311,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		031B76152E528DE5008A9AE8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		03B468F62E57C5BF004BF600 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +348,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		03B468F42E57C5BF004BF600 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +367,11 @@
 			isa = PBXTargetDependency;
 			target = 031B75FF2E528DE3008A9AE8 /* sltracker */;
 			targetProxy = 031B76182E528DE5008A9AE8 /* PBXContainerItemProxy */;
+		};
+		03B4690D2E57C5C0004BF600 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 03B468F72E57C5BF004BF600 /* SLTrackerWidgetExtension */;
+			targetProxy = 03B4690C2E57C5C0004BF600 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -321,6 +428,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -378,6 +486,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -393,6 +502,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = sltracker/sltracker.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = JQ4WB222T4;
@@ -421,6 +531,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = sltracker/sltracker.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = JQ4WB222T4;
@@ -512,6 +623,62 @@
 			};
 			name = Release;
 		};
+		03B469112E57C5C0004BF600 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = SLTrackerWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JQ4WB222T4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SLTrackerWidgetExtension-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = SLTrackerWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.erik.sltracker.SLTrackerWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		03B469122E57C5C0004BF600 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = SLTrackerWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = JQ4WB222T4;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SLTrackerWidgetExtension-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = SLTrackerWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.erik.sltracker.SLTrackerWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -547,6 +714,15 @@
 			buildConfigurations = (
 				031B76282E528DE5008A9AE8 /* Debug */,
 				031B76292E528DE5008A9AE8 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		03B469102E57C5C0004BF600 /* Build configuration list for PBXNativeTarget "SLTrackerWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				03B469112E57C5C0004BF600 /* Debug */,
+				03B469122E57C5C0004BF600 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

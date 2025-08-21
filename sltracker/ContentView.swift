@@ -58,6 +58,10 @@ struct ContentView: View {
     @State private var headerHeight: CGFloat = 0
     @State private var searchBarHeight: CGFloat = 0
     
+    init() {
+        print("🔍 ContentView: Initializing...")
+    }
+    
     /// All available Stockholm Metro stations
     private let allStations = [
         // Core Metro Stations (served by multiple lines)
@@ -168,6 +172,29 @@ struct ContentView: View {
                 ]
             )
         }
+        .onAppear {
+            print("🔍 ContentView: onAppear - PinnedStationsManager should be initialized")
+            print("🔍 ContentView: Current pinned stations count: \(pinnedManager.pinnedStations.count)")
+        }
+        .overlay(
+            // Temporary test button for debugging
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button("Test Pin T-Centralen") {
+                        print("🔍 ContentView: Test pin button pressed")
+                        pinnedManager.pinStation(id: "9001", name: "T-Centralen")
+                        print("🔍 ContentView: After pinning, count: \(pinnedManager.pinnedStations.count)")
+                    }
+                    .padding()
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                    .padding()
+                }
+            }
+        )
     }
     
     // MARK: - View Components

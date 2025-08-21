@@ -1,0 +1,72 @@
+#!/bin/bash
+
+echo "🔧 SL Tracker App Groups Setup Helper"
+echo "======================================"
+echo ""
+
+# Check if we're in the right directory
+if [ ! -f "sltracker.xcodeproj/project.pbxproj" ]; then
+    echo "❌ Error: Please run this script from the sltracker project root directory"
+    echo "   (where sltracker.xcodeproj is located)"
+    exit 1
+fi
+
+echo "✅ Found sltracker.xcodeproj"
+echo ""
+
+echo "📋 Manual Setup Required:"
+echo "=========================="
+echo ""
+echo "1. Open sltracker.xcodeproj in Xcode"
+echo "2. Select the project in the navigator (blue icon)"
+echo "3. For BOTH targets (sltracker and SLTrackerWidgetExtension):"
+echo "   - Select the target"
+echo "   - Go to 'Signing & Capabilities' tab"
+echo "   - Click '+ Capability'"
+echo "   - Add 'App Groups'"
+echo "   - Add group: group.com.erik.sltracker"
+echo "   - Make sure it's checked/enabled"
+echo ""
+echo "4. Clean and rebuild:"
+echo "   - Product → Clean Build Folder"
+echo "   - Product → Build (⌘+B)"
+echo ""
+echo "5. Test the widget:"
+echo "   - Run the app"
+echo "   - Pin a station"
+echo "   - Add the widget to home screen"
+echo ""
+
+echo "🔍 Debugging Tips:"
+echo "=================="
+echo ""
+echo "If the widget still shows 'Pin a station':"
+echo "1. Check Xcode console for debug messages"
+echo "2. Verify both targets have the same App Group ID"
+echo "3. Make sure you're signed in with the same Apple ID"
+echo "4. Try deleting and re-adding the widget"
+echo ""
+
+echo "📱 Testing Steps:"
+echo "================="
+echo "1. Run the app in the simulator"
+echo "2. Pin a station (e.g., 'T-Centralen')"
+echo "3. Add the widget to the home screen"
+echo "4. Check Xcode console for debug output"
+echo "5. The widget should show departures or an error message"
+echo ""
+
+echo "🎯 Expected Behavior:"
+echo "===================="
+echo "- If App Groups work: Widget shows departures"
+echo "- If App Groups don't work: Widget shows 'No pinned stations found'"
+echo "- If API fails: Widget shows the specific error"
+echo ""
+
+echo "📞 Need Help?"
+echo "============="
+echo "If you're still having issues:"
+echo "1. Check the Xcode console for debug messages"
+echo "2. Verify App Groups are properly configured"
+echo "3. Make sure both targets have the same bundle identifier prefix"
+echo ""
