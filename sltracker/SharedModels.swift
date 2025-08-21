@@ -176,42 +176,27 @@ class PinnedStationsManager: ObservableObject {
     private var userDefaults: UserDefaults {
         // Try to use App Group first, fallback to standard UserDefaults
         if let groupDefaults = UserDefaults(suiteName: "group.com.erik.sltracker") {
-            print("✅ Using App Groups for data sharing")
             return groupDefaults
         }
-        print("⚠️ App Groups not available, using standard UserDefaults")
         return UserDefaults.standard
     }
     
     init() {
-        print("🔍 PinnedStationsManager: Initializing...")
         loadPinnedStations()
     }
     
     /// Load pinned stations from UserDefaults
     private func loadPinnedStations() {
-        print("🔍 PinnedStationsManager: Loading pinned stations...")
-        
         if let data = userDefaults.data(forKey: storageKey),
            let stations = try? JSONDecoder().decode([PinnedStation].self, from: data) {
             pinnedStations = stations.sorted { $0.pinnedAt > $1.pinnedAt }
-            print("✅ PinnedStationsManager: Loaded \(pinnedStations.count) stations from UserDefaults")
-            for station in pinnedStations {
-                print("   - \(station.name) (ID: \(station.id))")
-            }
-        } else {
-            print("❌ PinnedStationsManager: No pinned stations found in UserDefaults")
         }
     }
     
     /// Save pinned stations to UserDefaults
     private func savePinnedStations() {
-        print("💾 PinnedStationsManager: Saving \(pinnedStations.count) pinned stations")
         if let data = try? JSONEncoder().encode(pinnedStations) {
             userDefaults.set(data, forKey: storageKey)
-            print("✅ PinnedStationsManager: Successfully saved pinned stations")
-        } else {
-            print("❌ PinnedStationsManager: Failed to encode pinned stations")
         }
     }
     
@@ -222,13 +207,8 @@ class PinnedStationsManager: ObservableObject {
     
     /// Pin a station
     func pinStation(id: String, name: String) {
-        print("📌 PinnedStationsManager: Attempting to pin station '\(name)' (ID: \(id))")
-        
         // Don't pin if already pinned
-        guard !isStationPinned(id: id) else { 
-            print("⚠️ PinnedStationsManager: Station '\(name)' is already pinned")
-            return 
-        }
+        guard !isStationPinned(id: id) else { return }
         
         let newStation = PinnedStation(id: id, name: name)
         pinnedStations.insert(newStation, at: 0)
@@ -238,15 +218,12 @@ class PinnedStationsManager: ObservableObject {
             pinnedStations.removeLast()
         }
         
-        print("✅ PinnedStationsManager: Successfully pinned '\(name)'. Total stations: \(pinnedStations.count)")
         savePinnedStations()
     }
     
     /// Unpin a station
     func unpinStation(id: String) {
-        print("📌 PinnedStationsManager: Attempting to unpin station (ID: \(id))")
         pinnedStations.removeAll { $0.id == id }
-        print("✅ PinnedStationsManager: Successfully unpinned station. Total stations: \(pinnedStations.count)")
         savePinnedStations()
     }
     

@@ -10,10 +10,6 @@ import SwiftUI
 @main
 struct sltrackerApp: App {
     
-    init() {
-        print("🚀 App launching...")
-    }
-    
     var body: some Scene {
         WindowGroup {
             ContentView()

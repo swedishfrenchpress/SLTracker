@@ -20,18 +20,12 @@ struct SLTrackerWidgetEntry: TimelineEntry {
         self.stationName = stationName
         self.departures = departures
         self.errorMessage = errorMessage
-        print("🔍 Widget: SLTrackerWidgetEntry created - station: \(stationName ?? "nil"), departures: \(departures?.count ?? 0), error: \(errorMessage ?? "nil")")
     }
 }
 
 /// The main widget view that displays departures for the first pinned station
 struct SLTrackerWidgetEntryView: View {
     var entry: SLTrackerWidgetEntry
-    
-    init(entry: SLTrackerWidgetEntry) {
-        self.entry = entry
-        print("🔍 Widget: SLTrackerWidgetEntryView initialized with entry: \(entry)")
-    }
     
     var body: some View {
         ZStack {
@@ -58,9 +52,6 @@ struct SLTrackerWidgetEntryView: View {
                 // No pinned stations
                 noPinnedStationsView
             }
-        }
-        .onAppear {
-            print("🔍 Widget: SLTrackerWidgetEntryView appeared")
         }
     }
     
@@ -203,13 +194,8 @@ struct SLTrackerWidgetEntryView: View {
 struct SLTrackerWidgetProvider: TimelineProvider {
     typealias Entry = SLTrackerWidgetEntry
     
-    init() {
-        print("🔍 Widget: SLTrackerWidgetProvider initialized")
-    }
-    
     /// Provides a placeholder entry for when the widget is first added
     func placeholder(in context: Context) -> SLTrackerWidgetEntry {
-        print("🔍 Widget: Providing placeholder entry")
         return SLTrackerWidgetEntry(
             date: Date(),
             stationName: "Loading...",
@@ -220,7 +206,6 @@ struct SLTrackerWidgetProvider: TimelineProvider {
     
     /// Provides a snapshot entry for the widget gallery
     func getSnapshot(in context: Context, completion: @escaping (SLTrackerWidgetEntry) -> Void) {
-        print("🔍 Widget: Getting snapshot entry")
         Task {
             let entry = await fetchWidgetData()
             completion(entry)
@@ -229,7 +214,6 @@ struct SLTrackerWidgetProvider: TimelineProvider {
     
     /// Provides timeline entries for the widget
     func getTimeline(in context: Context, completion: @escaping (Timeline<SLTrackerWidgetEntry>) -> Void) {
-        print("🔍 Widget: Getting timeline entries")
         Task {
             let entry = await fetchWidgetData()
             
@@ -237,15 +221,12 @@ struct SLTrackerWidgetProvider: TimelineProvider {
             let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date()) ?? Date()
             let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
             
-            print("🔍 Widget: Timeline created with next update at \(nextUpdate)")
             completion(timeline)
         }
     }
     
     /// Fetches the widget data by getting the first pinned station and its departures
     private func fetchWidgetData() async -> SLTrackerWidgetEntry {
-        print("🔍 Widget: Starting to fetch widget data...")
-        
         // Use App Groups to access shared data
         let sharedDefaults = UserDefaults(suiteName: "group.com.erik.sltracker") ?? UserDefaults.standard
         
@@ -255,17 +236,10 @@ struct SLTrackerWidgetProvider: TimelineProvider {
         if let data = sharedDefaults.data(forKey: "pinnedStations"),
            let stations = try? JSONDecoder().decode([PinnedStation].self, from: data) {
             pinnedStations = stations.sorted { $0.pinnedAt > $1.pinnedAt }
-            print("✅ Widget: Found \(pinnedStations.count) pinned stations in UserDefaults")
-            for station in pinnedStations {
-                print("   - \(station.name) (ID: \(station.id))")
-            }
-        } else {
-            print("❌ Widget: No pinned stations found in UserDefaults")
         }
         
         // Get the first pinned station
         guard let firstStation = pinnedStations.first else {
-            print("❌ Widget: No pinned stations available")
             return SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: nil,
@@ -274,14 +248,10 @@ struct SLTrackerWidgetProvider: TimelineProvider {
             )
         }
         
-        print("✅ Widget: Using first pinned station: \(firstStation.name)")
-        
         // Fetch departures for the first station
         do {
             let apiManager = APIManager.shared
             let departures = try await apiManager.fetchMetroDepartures(for: firstStation.name)
-            
-            print("✅ Widget: Fetched \(departures.count) departures for \(firstStation.name)")
             
             return SLTrackerWidgetEntry(
                 date: Date(),
@@ -290,7 +260,6 @@ struct SLTrackerWidgetProvider: TimelineProvider {
                 errorMessage: nil
             )
         } catch {
-            print("❌ Widget: Error fetching departures: \(error)")
             return SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: firstStation.name,
@@ -304,10 +273,6 @@ struct SLTrackerWidgetProvider: TimelineProvider {
 /// The widget bundle that contains all widget sizes
 struct SLTrackerWidget: Widget {
     let kind: String = "SLTrackerWidget"
-    
-    init() {
-        print("🔍 Widget: SLTrackerWidget initialized")
-    }
     
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: SLTrackerWidgetProvider()) { entry in

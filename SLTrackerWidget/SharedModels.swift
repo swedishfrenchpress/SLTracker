@@ -182,43 +182,21 @@ class PinnedStationsManager: ObservableObject {
     }
     
     init() {
-        print("🔍 PinnedStationsManager: Initializing...")
         loadPinnedStations()
     }
     
     /// Load pinned stations from UserDefaults
     private func loadPinnedStations() {
-        print("🔍 PinnedStationsManager: Loading pinned stations...")
-        
         if let data = userDefaults.data(forKey: storageKey),
            let stations = try? JSONDecoder().decode([PinnedStation].self, from: data) {
             pinnedStations = stations.sorted { $0.pinnedAt > $1.pinnedAt }
-            print("✅ PinnedStationsManager: Loaded \(pinnedStations.count) stations from UserDefaults")
-            for station in pinnedStations {
-                print("   - \(station.name) (ID: \(station.id))")
-            }
-        } else {
-            print("❌ PinnedStationsManager: No pinned stations found in UserDefaults")
         }
     }
     
     /// Save pinned stations to UserDefaults
     private func savePinnedStations() {
-        print("💾 PinnedStationsManager: Saving \(pinnedStations.count) stations...")
-        
         if let data = try? JSONEncoder().encode(pinnedStations) {
             userDefaults.set(data, forKey: storageKey)
-            print("✅ PinnedStationsManager: Successfully saved to UserDefaults")
-            
-            // Debug: Verify the save worked
-            if let savedData = userDefaults.data(forKey: storageKey),
-               let savedStations = try? JSONDecoder().decode([PinnedStation].self, from: savedData) {
-                print("✅ PinnedStationsManager: Verified save - found \(savedStations.count) stations")
-            } else {
-                print("❌ PinnedStationsManager: Save verification failed!")
-            }
-        } else {
-            print("❌ PinnedStationsManager: Failed to encode stations for saving")
         }
     }
     
