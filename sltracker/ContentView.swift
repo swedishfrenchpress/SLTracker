@@ -353,43 +353,50 @@ struct ContentView: View {
     /// The search bar section (without dropdown)
     private var searchBarSection: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 16, weight: .medium))
-                
-                TextField("Search for a station", text: $stationName)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .focused($isSearchFocused)
-                    .onChange(of: stationName) { _, newValue in
-                        updateSuggestions(for: newValue)
-                    }
-                    .onSubmit {
-                        if let firstSuggestion = filteredStations.first {
-                            selectStation(firstSuggestion)
+            Button(action: {
+                isSearchFocused = true
+            }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 16, weight: .medium))
+                    
+                    TextField("Search for a station", text: $stationName)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .focused($isSearchFocused)
+                        .onChange(of: stationName) { _, newValue in
+                            updateSuggestions(for: newValue)
                         }
-                    }
-                
-                if !stationName.isEmpty {
-                    Button(action: {
-                        stationName = ""
-                        filteredStations = []
-                        showingSuggestions = false
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 16))
+                        .onSubmit {
+                            if let firstSuggestion = filteredStations.first {
+                                selectStation(firstSuggestion)
+                            }
+                        }
+                        .allowsHitTesting(true)
+                    
+                    if !stationName.isEmpty {
+                        Button(action: {
+                            stationName = ""
+                            filteredStations = []
+                            showingSuggestions = false
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                                .font(.system(size: 16))
+                        }
+                        .allowsHitTesting(true)
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(isSearchMode ? Color(.systemGray5) : Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(isSearchFocused ? Color.blue : (isSearchMode ? Color(.systemGray4) : Color.clear), lineWidth: isSearchMode ? 1 : 1.5)
+                )
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(isSearchMode ? Color(.systemGray5) : Color(.systemGray6))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSearchFocused ? Color.blue : (isSearchMode ? Color(.systemGray4) : Color.clear), lineWidth: isSearchMode ? 1 : 1.5)
-            )
+            .buttonStyle(PlainButtonStyle())
             
             // Helper text removed - redundant with search field placeholder
         }
