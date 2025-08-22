@@ -132,22 +132,18 @@ struct ContentView: View {
             Color(.systemBackground)
                 .ignoresSafeArea()
             
-            // Main content layers with smooth transitions (iOS-standard navigation)
+            // Main content layers with iOS-standard navigation animations
             switch isSearchMode {
             case false:
-                // Home screen
+                // Home screen - always present, no insertion animation
                 homeScreenView
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
                     .zIndex(0)
                     
             case true:
-                // Search results screen
+                // Search results screen - slides in from right, out to right
                 searchResultsView
                     .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
                         removal: .move(edge: .trailing).combined(with: .opacity)
                     ))
                     .zIndex(1)
