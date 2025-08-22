@@ -192,7 +192,7 @@ struct ContentView: View {
     
     // MARK: - View Components
     
-    /// Home screen view with custom header and dynamic dropdown positioning
+    /// Home screen view with tap-to-dismiss functionality
     private var homeScreenView: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
@@ -230,6 +230,13 @@ struct ContentView: View {
                     footerSection
                 }
                 .padding(.horizontal)
+                .contentShape(Rectangle()) // Make entire area tappable
+                .onTapGesture {
+                    // Dismiss dropdown and keyboard when tapping outside
+                    if showingSuggestions {
+                        dismissDropdownAndKeyboard()
+                    }
+                }
                 
                 // Dynamic dropdown overlay
                 if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
@@ -241,6 +248,7 @@ struct ContentView: View {
                         
                         dropdownView
                             .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
+                            .allowsHitTesting(true) // Ensure dropdown can receive taps
                         
                         Spacer()
                     }
@@ -259,7 +267,7 @@ struct ContentView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
     
-    /// Search results view with custom navigation
+    /// Search results view with tap-to-dismiss functionality
     private var searchResultsView: some View {
         VStack(spacing: 0) {
             // Custom navigation bar
@@ -274,6 +282,7 @@ struct ContentView: View {
                     dropdownView
                         .padding(.top, 8) // Natural spacing
                         .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
+                        .allowsHitTesting(true) // Ensure dropdown can receive taps
                 }
             }
             
@@ -283,6 +292,13 @@ struct ContentView: View {
             Spacer()
         }
         .padding(.horizontal)
+        .contentShape(Rectangle()) // Make entire area tappable
+        .onTapGesture {
+            // Dismiss dropdown and keyboard when tapping outside
+            if showingSuggestions {
+                dismissDropdownAndKeyboard()
+            }
+        }
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
     
@@ -709,6 +725,20 @@ struct ContentView: View {
         isSearchFocused = false
         showingSuggestions = false
         filteredStations = []
+    }
+    
+    /// Dismisses dropdown and keyboard when tapping outside
+    private func dismissDropdownAndKeyboard() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            showingSuggestions = false
+            isSearchFocused = false
+        }
+        
+        // Clear filtered stations
+        filteredStations = []
+        
+        // Dismiss keyboard
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     /// Gets the current site ID for the selected station
