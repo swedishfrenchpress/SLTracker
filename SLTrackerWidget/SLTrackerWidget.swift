@@ -205,12 +205,13 @@ struct SLTrackerWidgetEntryView: View {
         }
     }
     
-    /// Converts a date to a time string for display (e.g., "1:03 PM")
+    /// Converts a date to a time string for display (respects user's time format preference)
     private func timeString(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         formatter.dateStyle = .none
-        formatter.locale = Locale(identifier: "en_US") // Ensure consistent formatting
+        // Use current locale to respect user's 12/24 hour preference
+        formatter.locale = Locale.current
         let timeString = formatter.string(from: date)
         print("Widget timeString: \(timeString) from date: \(date)")
         return timeString

@@ -61,6 +61,10 @@ struct ContentView: View {
     @State private var headerHeight: CGFloat = 0
     @State private var searchBarHeight: CGFloat = 0
     
+    /// Easter egg state variables
+    @State private var showingThankYou = false
+    @State private var easterEggTapCount = 0
+    
     /// All available Stockholm Metro stations
     private let allStations = [
         // Core Metro Stations (served by multiple lines)
@@ -153,6 +157,11 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: isSearchMode)
         .animation(.easeInOut(duration: 0.25), value: showingSuggestions)
+        
+        // Easter egg overlay
+        .overlay(
+            ThankYouView(isVisible: $showingThankYou)
+        )
         .onChange(of: navigationState.shouldNavigateToStation) { _, shouldNavigate in
             if shouldNavigate, let stationName = navigationState.targetStation {
                 // Navigate to the station from widget
@@ -226,7 +235,7 @@ struct ContentView: View {
                 if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
                     VStack(spacing: 0) {
                         // Dynamic positioning with fallback values for initial state
-                        let calculatedHeight = max(headerHeight + searchBarHeight + 8, 120) // Fallback to 120 if measurements not ready
+                        let calculatedHeight = max(headerHeight + searchBarHeight + 16, 140) // Increased spacing after moving search bar
                         Spacer()
                             .frame(height: calculatedHeight)
                         
@@ -299,8 +308,8 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
     }
     
     /// Custom navigation bar for search mode
@@ -476,7 +485,6 @@ struct ContentView: View {
             }
             .background(Color(.systemBackground))
             .cornerRadius(12)
-            .padding(.horizontal)
             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.35)))
@@ -567,6 +575,10 @@ struct ContentView: View {
             .font(.caption2)
             .foregroundColor(.secondary)
             .padding(.bottom, 20)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                triggerEasterEgg()
+            }
     }
     
     /// Dropdown view that follows SwiftUI's natural layout
@@ -616,9 +628,9 @@ struct ContentView: View {
         .background(Color(.systemGray6))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, 16)
         .scaleEffect(showingSuggestions ? 1.0 : 0.95)
-    }
+        }
     
     // MARK: - Actions
     
@@ -714,6 +726,28 @@ struct ContentView: View {
     private func refreshDepartures() {
         guard !viewModel.currentStation.isEmpty else { return }
         viewModel.fetchDepartures(for: viewModel.currentStation)
+    }
+    
+    /// Triggers the easter egg (requires 3 taps)
+    private func triggerEasterEgg() {
+        easterEggTapCount += 1
+        
+        // Reset tap count after 3 seconds if not completed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            if easterEggTapCount < 3 {
+                easterEggTapCount = 0
+            }
+        }
+        
+        // Show easter egg after 3 taps
+        if easterEggTapCount >= 3 {
+            easterEggTapCount = 0 // Reset for next time
+            
+            // Show thank you screen
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showingThankYou = true
+            }
+        }
     }
     
 
@@ -879,4 +913,53 @@ struct DepartureRowView: View {
 
 #Preview {
     ContentView()
+}
+
+// MARK: - Easter Egg Views
+
+
+
+/// Thank you screen with dedication message
+struct ThankYouView: View {
+    @Binding var isVisible: Bool
+    
+    var body: some View {
+        if isVisible {
+            ZStack {
+                // Clean background
+                Color(.systemBackground)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 40) {
+                    Spacer()
+                    
+                    VStack(spacing: 16) {
+                        // Simple title
+                        Text("Dedication")
+                            .font(.title)
+                            .foregroundColor(.primary)
+                        
+                        // Simple subtitle
+                        Text("This app is dedicated to Johanna, and my friends Alex, Nick, and Elin from Katerina Ol Cafe. The best bar in Stockholm.")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                    }
+                    
+                    Spacer()
+                    
+                    // Simple close text
+                    Button("Close") {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isVisible = false
+                        }
+                    }
+                    .foregroundColor(.blue)
+                }
+                .padding(.vertical, 80)
+            }
+            .transition(.opacity)
+        }
+    }
 }
