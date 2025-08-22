@@ -363,7 +363,7 @@ class APIManager {
             "Skarpnäck": "9140",
             
             // Northbound from T-Centralen (Line 13/14)
-            "Östermalmstorg": "9194",
+            "Östermalmstorg": "9206",
             "Stadion": "9195",
             "Tekniska högskolan": "9196",
             "Universitetet": "9197",
