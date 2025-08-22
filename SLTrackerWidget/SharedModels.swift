@@ -467,8 +467,8 @@ class APIManager {
             
             // Line 11 specific stations (Akalla branch)
             "Akalla": "9254",
-            "Kista": "9255",
-            "Husby": "9256",
+            "Kista": "9302",
+            "Husby": "9301",
             "Kungens kurva": "9257"
         ]
         

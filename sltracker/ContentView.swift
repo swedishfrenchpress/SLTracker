@@ -644,7 +644,7 @@ struct ContentView: View {
         .background(Color(.systemGray6))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
-        .padding(.horizontal, 32) // Match search bar's total padding (16 + 16)
+        .padding(.horizontal, isSearchMode ? 16 : 32) // Match context-specific padding
         .scaleEffect(showingSuggestions ? 1.0 : 0.95)
         }
     
