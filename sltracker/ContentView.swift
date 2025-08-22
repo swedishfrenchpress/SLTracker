@@ -132,14 +132,14 @@ struct ContentView: View {
             Color(.systemBackground)
                 .ignoresSafeArea()
             
-            // Main content layers with smooth transitions
+            // Main content layers with smooth transitions (iOS-standard navigation)
             switch isSearchMode {
             case false:
                 // Home screen
                 homeScreenView
                     .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .move(edge: .trailing).combined(with: .opacity)
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
                     ))
                     .zIndex(0)
                     
@@ -147,8 +147,8 @@ struct ContentView: View {
                 // Search results screen
                 searchResultsView
                     .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
                     ))
                     .zIndex(1)
             }
@@ -408,7 +408,7 @@ struct ContentView: View {
     private var contentSection: some View {
         VStack {
             if viewModel.isLoading {
-                // Loading state
+                // Loading state - always show when loading in search mode
                 loadingView
             } else if let errorMessage = viewModel.errorMessage {
                 // Error state
@@ -419,9 +419,12 @@ struct ContentView: View {
             } else if !viewModel.currentStation.isEmpty {
                 // No departures found
                 noDeparturesView
-            } else {
-                // Initial state
+            } else if !isSearchMode {
+                // Initial state - only show on home screen, not in search mode
                 initialView
+            } else {
+                // Empty space in search mode when no station selected yet
+                Spacer()
             }
         }
         .padding(.top, isSearchMode ? 16 : 32)
@@ -544,7 +547,7 @@ struct ContentView: View {
                 // Pinned stations
                 pinnedStationsView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)).animation(.easeInOut(duration: 0.4)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.4)))
             }
         }
     }
