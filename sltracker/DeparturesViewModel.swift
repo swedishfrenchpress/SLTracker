@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import WidgetKit
 
 /// Manages the state and business logic for metro departures
 @MainActor
@@ -66,6 +67,9 @@ class DeparturesViewModel: ObservableObject {
                 
                 // Update the departures on the main thread
                 departures = sortedDepartures
+                
+                // Trigger widget update when new data is available
+                WidgetCenter.shared.reloadAllTimelines()
                 
             } catch {
                 // Handle any errors that occurred

@@ -33,6 +33,9 @@ struct ContentView: View {
     /// The pinned stations manager
     @StateObject private var pinnedManager = PinnedStationsManager()
     
+    /// Navigation state for deep linking
+    @EnvironmentObject var navigationState: NavigationState
+    
     /// The text the user enters for the station name
     @State private var stationName = ""
     
@@ -150,6 +153,13 @@ struct ContentView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: isSearchMode)
         .animation(.easeInOut(duration: 0.25), value: showingSuggestions)
+        .onChange(of: navigationState.shouldNavigateToStation) { _, shouldNavigate in
+            if shouldNavigate, let stationName = navigationState.targetStation {
+                // Navigate to the station from widget
+                selectStation(stationName)
+                navigationState.clearNavigationTarget()
+            }
+        }
         .actionSheet(isPresented: $showingPinActionSheet) {
             let currentSiteID = getCurrentSiteID()
             let isPinned = pinnedManager.isStationPinned(id: currentSiteID)
@@ -276,6 +286,17 @@ struct ContentView: View {
                 .foregroundColor(.primary)
             
             Spacer()
+            
+            // Refresh button for home screen
+            if !viewModel.departures.isEmpty {
+                Button(action: refreshDepartures) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.blue)
+                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                        .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                }
+            }
         }
         .padding(.horizontal)
         .padding(.top, 8)
@@ -694,6 +715,8 @@ struct ContentView: View {
         guard !viewModel.currentStation.isEmpty else { return }
         viewModel.fetchDepartures(for: viewModel.currentStation)
     }
+    
+
 }
 
 // MARK: - Pinned Station Row View

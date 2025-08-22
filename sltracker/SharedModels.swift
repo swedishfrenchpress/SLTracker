@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import WidgetKit
 
 // MARK: - API Response Models (Shared between app and widget)
 
@@ -197,6 +198,12 @@ class PinnedStationsManager: ObservableObject {
     private func savePinnedStations() {
         if let data = try? JSONEncoder().encode(pinnedStations) {
             userDefaults.set(data, forKey: storageKey)
+            
+            // Add a timestamp to force widget refresh
+            userDefaults.set(Date().timeIntervalSince1970, forKey: "pinnedStationsLastUpdated")
+            
+            // Trigger widget refresh when pinned stations change
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
     

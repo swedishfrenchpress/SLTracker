@@ -7,19 +7,22 @@
 
 import WidgetKit
 import SwiftUI
+import Intents
 
 /// The data structure for widget entries
-struct SLTrackerWidgetEntry: TimelineEntry {
+struct SLTrackerWidgetEntry: TimelineEntry, Codable {
     let date: Date
     let stationName: String?
     let departures: [Departure]?
     let errorMessage: String?
+    let lastUpdated: Date
     
     init(date: Date, stationName: String?, departures: [Departure]?, errorMessage: String?) {
         self.date = date
         self.stationName = stationName
         self.departures = departures
         self.errorMessage = errorMessage
+        self.lastUpdated = Date()
     }
 }
 
@@ -53,12 +56,14 @@ struct SLTrackerWidgetEntryView: View {
                 noPinnedStationsView
             }
         }
+        .widgetURL(URL(string: "sltracker://station/\(entry.stationName?.addingPercentEncoding(withAllowedCharacters: .urlHostAllowed) ?? "")"))
+        .contentShape(Rectangle()) // Makes the entire widget tappable
     }
     
     /// View showing the departures list
     private func departuresView(departures: [Departure], stationName: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Header with station name
+            // Header with station name and refresh info
             HStack {
                 Image(systemName: "tram.fill")
                     .foregroundColor(.blue)
@@ -70,6 +75,17 @@ struct SLTrackerWidgetEntryView: View {
                     .lineLimit(1)
                 
                 Spacer()
+                
+                // Refresh icon and timestamp
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    Text(timeString(from: entry.lastUpdated))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
@@ -109,10 +125,10 @@ struct SLTrackerWidgetEntryView: View {
             
             Spacer()
             
-            // Time
-            Text(departure.display)
+            // Time - show actual time instead of relative time
+            Text(formatDepartureTime(departure.expected))
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
+                .foregroundColor(.blue)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
@@ -188,6 +204,34 @@ struct SLTrackerWidgetEntryView: View {
             return Color.gray // Default for unknown lines
         }
     }
+    
+    /// Converts a date to a time string for display (e.g., "1:03 PM")
+    private func timeString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        formatter.locale = Locale(identifier: "en_US") // Ensure consistent formatting
+        let timeString = formatter.string(from: date)
+        print("Widget timeString: \(timeString) from date: \(date)")
+        return timeString
+    }
+    
+    /// Formats departure time from API string to display time (e.g., "13:32")
+    private func formatDepartureTime(_ timeString: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        formatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
+        
+        if let date = formatter.date(from: timeString) {
+            let displayFormatter = DateFormatter()
+            displayFormatter.dateFormat = "HH:mm"
+            displayFormatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
+            return displayFormatter.string(from: date)
+        }
+        
+        // Fallback to original display if parsing fails
+        return timeString
+    }
 }
 
 /// The widget provider that supplies timeline entries
@@ -215,12 +259,35 @@ struct SLTrackerWidgetProvider: TimelineProvider {
     /// Provides timeline entries for the widget
     func getTimeline(in context: Context, completion: @escaping (Timeline<SLTrackerWidgetEntry>) -> Void) {
         Task {
+            // Fetch current data
             let entry = await fetchWidgetData()
             
-            // Update every 5 minutes
-            let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date()) ?? Date()
-            let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+            // Create a more aggressive update strategy
+            var entries: [SLTrackerWidgetEntry] = [entry]
             
+            // Create multiple future entries with shorter intervals
+            // This helps iOS understand we want frequent updates
+            let currentDate = Date()
+            
+            // Add entries for the next 5 minutes with 30-second intervals
+            for i in 1...10 {
+                if let futureDate = Calendar.current.date(byAdding: .second, value: i * 30, to: currentDate) {
+                    // Create a placeholder entry that will be refreshed
+                    let futureEntry = SLTrackerWidgetEntry(
+                        date: futureDate,
+                        stationName: entry.stationName,
+                        departures: entry.departures,
+                        errorMessage: entry.errorMessage
+                    )
+                    entries.append(futureEntry)
+                }
+            }
+            
+            // Use a very aggressive update policy for real-time feel
+            // Request updates every 30 seconds, but iOS may not honor this
+            let nextUpdate = Calendar.current.date(byAdding: .second, value: 30, to: currentDate) ?? currentDate
+            
+            let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
             completion(timeline)
         }
     }
@@ -229,6 +296,18 @@ struct SLTrackerWidgetProvider: TimelineProvider {
     private func fetchWidgetData() async -> SLTrackerWidgetEntry {
         // Use App Groups to access shared data
         let sharedDefaults = UserDefaults(suiteName: "group.com.erik.sltracker") ?? UserDefaults.standard
+        
+        // Check if we have cached data that's recent enough
+        let lastCacheTime = sharedDefaults.double(forKey: "widgetDataLastUpdated")
+        let currentTime = Date().timeIntervalSince1970
+        let cacheAge = currentTime - lastCacheTime
+        
+        // Use cached data if it's less than 30 seconds old
+        if cacheAge < 30, 
+           let cachedData = sharedDefaults.data(forKey: "widgetCachedData"),
+           let cachedEntry = try? JSONDecoder().decode(SLTrackerWidgetEntry.self, from: cachedData) {
+            return cachedEntry
+        }
         
         // Try to get pinned stations from shared UserDefaults
         var pinnedStations: [PinnedStation] = []
@@ -240,12 +319,14 @@ struct SLTrackerWidgetProvider: TimelineProvider {
         
         // Get the first pinned station
         guard let firstStation = pinnedStations.first else {
-            return SLTrackerWidgetEntry(
+            let entry = SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: nil,
                 departures: nil,
                 errorMessage: "No pinned stations found"
             )
+            cacheWidgetData(entry)
+            return entry
         }
         
         // Fetch departures for the first station
@@ -253,19 +334,36 @@ struct SLTrackerWidgetProvider: TimelineProvider {
             let apiManager = APIManager.shared
             let departures = try await apiManager.fetchMetroDepartures(for: firstStation.name)
             
-            return SLTrackerWidgetEntry(
+            let entry = SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: firstStation.name,
                 departures: departures,
                 errorMessage: nil
             )
+            
+            // Cache the successful result
+            cacheWidgetData(entry)
+            return entry
+            
         } catch {
-            return SLTrackerWidgetEntry(
+            let entry = SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: firstStation.name,
                 departures: nil,
                 errorMessage: "Error loading departures"
             )
+            cacheWidgetData(entry)
+            return entry
+        }
+    }
+    
+    /// Caches widget data to reduce API calls
+    private func cacheWidgetData(_ entry: SLTrackerWidgetEntry) {
+        let sharedDefaults = UserDefaults(suiteName: "group.com.erik.sltracker") ?? UserDefaults.standard
+        
+        if let data = try? JSONEncoder().encode(entry) {
+            sharedDefaults.set(data, forKey: "widgetCachedData")
+            sharedDefaults.set(Date().timeIntervalSince1970, forKey: "widgetDataLastUpdated")
         }
     }
 }
@@ -281,6 +379,7 @@ struct SLTrackerWidget: Widget {
         .configurationDisplayName("SL Tracker")
         .description("Shows departures for your pinned stations.")
         .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }
 
