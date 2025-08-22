@@ -469,30 +469,36 @@ struct ContentView: View {
     /// List of departures with smooth animations
     private var departuresList: some View {
         VStack(spacing: 0) {
-            // Departures list
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(viewModel.departures.enumerated()), id: \.element.id) { index, departure in
-                        DepartureRowView(departure: departure)
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                            // Staggered entrance animation for each departure
-                            .transition(.asymmetric(
-                                insertion: .opacity.combined(with: .move(edge: .trailing))
-                                    .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
-                                removal: .opacity.animation(.easeInOut(duration: 0.2))
-                            ))
-                        
-                        if index < viewModel.departures.count - 1 {
-                            Divider()
-                                .padding(.leading)
+            // Departures list with scroll-based animations
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(viewModel.departures.enumerated()), id: \.element.id) { index, departure in
+                            DepartureRowView(departure: departure)
+                                .padding(.horizontal)
+                                .padding(.vertical, 8)
+                                .id(departure.id) // Ensure unique ID for scroll tracking
+                                // Enhanced scroll-based fade animation
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .trailing))
+                                        .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
+                                    removal: .opacity.animation(.easeInOut(duration: 0.2))
+                                ))
+                                // Add scroll-based fade effect
+                                .modifier(ScrollFadeModifier(index: index))
+                            
+                            if index < viewModel.departures.count - 1 {
+                                Divider()
+                                    .padding(.leading)
+                            }
                         }
                     }
                 }
+                .coordinateSpace(name: "scroll") // Add coordinate space for scroll tracking
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
             }
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
         }
         .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.35)))
     }
@@ -874,7 +880,8 @@ struct DepartureRowView: View {
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.4)) {
+            // Snappier initial animation to work with scroll-based animations
+            withAnimation(.easeOut(duration: 0.2)) {
                 isVisible = true
             }
             
@@ -924,8 +931,6 @@ struct DepartureRowView: View {
 
 // MARK: - Easter Egg Views
 
-
-
 /// Thank you screen with dedication message
 struct ThankYouView: View {
     @Binding var isVisible: Bool
@@ -968,5 +973,99 @@ struct ThankYouView: View {
             }
             .transition(.opacity)
         }
+    }
+}
+
+// MARK: - Scroll Fade Modifier
+
+/// A custom modifier that applies beautiful fade animations based on scroll position
+/// This creates the same fade effect when scrolling up as when scrolling down
+/// 
+/// How it works:
+/// 1. Tracks scroll position using GeometryReader and preference keys
+/// 2. Determines scroll direction by comparing current vs previous scroll offset
+/// 3. Applies fade-in animations when items come into view (both up and down scrolling)
+/// 4. Uses staggered delays for a beautiful cascading effect
+struct ScrollFadeModifier: ViewModifier {
+    let index: Int
+    
+    @State private var isVisible = false
+    @State private var scrollOffset: CGFloat = 0
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var scrollDirection: ScrollDirection = .none
+    
+    // Animation timing for smooth fade effects - optimized for snappier response
+    private let fadeInDuration: Double = 0.2
+    private let fadeOutDuration: Double = 0.15
+    private let staggerDelay: Double = 0.01
+    
+    enum ScrollDirection {
+        case up, down, none
+    }
+    
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1.0 : 0.0)
+            .scaleEffect(isVisible ? 1.0 : 0.98)
+            .offset(y: isVisible ? 0 : (scrollDirection == .up ? 5 : -5))
+            .animation(
+                .easeOut(duration: isVisible ? fadeInDuration : fadeOutDuration)
+                .delay(Double(index) * staggerDelay),
+                value: isVisible
+            )
+            .onAppear {
+                // Initial fade in with minimal delay for snappier response
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * staggerDelay) {
+                    withAnimation(.easeOut(duration: fadeInDuration)) {
+                        isVisible = true
+                    }
+                }
+            }
+            .onDisappear {
+                // Fade out when disappearing
+                withAnimation(.easeOut(duration: fadeOutDuration)) {
+                    isVisible = false
+                }
+            }
+            // Add scroll detection using GeometryReader
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
+                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                            scrollOffset = value
+                            
+                            // Determine scroll direction with much lower threshold for snappier response
+                            if abs(scrollOffset - lastScrollOffset) > 2 { // Reduced threshold for immediate response
+                                scrollDirection = scrollOffset > lastScrollOffset ? .up : .down
+                                
+                                // Apply fade animation based on scroll direction - immediate response
+                                if scrollDirection == .up {
+                                    // Fade in when scrolling up (items coming into view from bottom)
+                                    withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
+                                        isVisible = true
+                                    }
+                                } else if scrollDirection == .down {
+                                    // Fade in when scrolling down (items coming into view from top)
+                                    withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
+                                        isVisible = true
+                                    }
+                                }
+                            }
+                            
+                            lastScrollOffset = scrollOffset
+                        }
+                }
+            )
+    }
+}
+
+// MARK: - Scroll Offset Preference Key
+
+/// Preference key for tracking scroll offset
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
