@@ -11,12 +11,12 @@ import SwiftUI
 struct sltrackerApp: App {
     
     // Shared state for navigation
-    @StateObject private var navigationState = NavigationState()
+    @State private var navigationState = NavigationState()
     
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(navigationState)
+                .environment(navigationState)
                 .onOpenURL { url in
                     // Handle widget station URL
                     if url.scheme == "sltracker" && url.host == "station" {

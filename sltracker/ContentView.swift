@@ -28,13 +28,13 @@ struct ContentView: View {
     // MARK: - Properties
     
     /// The view model that manages our departure data
-    @StateObject private var viewModel = DeparturesViewModel()
+    @State private var viewModel = DeparturesViewModel()
     
     /// The pinned stations manager
-    @StateObject private var pinnedManager = PinnedStationsManager()
+    @State private var pinnedManager = PinnedStationsManager()
     
     /// Navigation state for deep linking
-    @EnvironmentObject var navigationState: NavigationState
+    @Environment(NavigationState.self) private var navigationState
     
     /// The text the user enters for the station name
     @State private var stationName = ""
@@ -165,23 +165,25 @@ struct ContentView: View {
                 navigationState.clearNavigationTarget()
             }
         }
-        .actionSheet(isPresented: $showingPinActionSheet) {
+        .confirmationDialog(
+            stationName,
+            isPresented: $showingPinActionSheet,
+            titleVisibility: .visible
+        ) {
             let currentSiteID = getCurrentSiteID()
             let isPinned = pinnedManager.isStationPinned(id: currentSiteID)
             
-            return ActionSheet(
-                title: Text(stationName),
-                buttons: [
-                    isPinned 
-                        ? .destructive(Text("Unpin this station")) {
-                            pinnedManager.unpinStation(id: currentSiteID)
-                        }
-                        : .default(Text("Pin this station")) {
-                            pinnedManager.pinStation(id: currentSiteID, name: stationName)
-                        },
-                    .cancel()
-                ]
-            )
+            if isPinned {
+                Button("Unpin this station", role: .destructive) {
+                    pinnedManager.unpinStation(id: currentSiteID)
+                }
+            } else {
+                Button("Pin this station") {
+                    pinnedManager.pinStation(id: currentSiteID, name: stationName)
+                }
+            }
+            
+            Button("Cancel", role: .cancel) { }
         }
 
     }
@@ -265,34 +267,44 @@ struct ContentView: View {
     
     /// Search results view with tap-to-dismiss functionality
     private var searchResultsView: some View {
-        VStack(spacing: 0) {
-            // Custom navigation bar
-            customNavigationBar
-            
-            // Search Section with integrated dropdown
+        ZStack(alignment: .top) {
+            // Main content
             VStack(spacing: 0) {
+                // Custom navigation bar
+                customNavigationBar
+                
+                // Search Section
                 searchBarSection
                 
-                // Dropdown appears naturally in the flow when typing
-                if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
-                    dropdownView
-                        .padding(.top, 8) // Natural spacing
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
-                        .allowsHitTesting(true) // Ensure dropdown can receive taps
+                // Content Section  
+                contentSection
+                
+                Spacer()
+            }
+            .padding(.horizontal)
+            .contentShape(Rectangle()) // Make entire area tappable
+            .onTapGesture {
+                // Dismiss dropdown and keyboard when tapping outside
+                if showingSuggestions {
+                    dismissDropdownAndKeyboard()
                 }
             }
             
-            // Content Section  
-            contentSection
-            
-            Spacer()
-        }
-        .padding(.horizontal)
-        .contentShape(Rectangle()) // Make entire area tappable
-        .onTapGesture {
-            // Dismiss dropdown and keyboard when tapping outside
-            if showingSuggestions {
-                dismissDropdownAndKeyboard()
+            // Dropdown overlay - appears over content, not pushing it down
+            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+                VStack {
+                    // Position below navigation bar and search field (approximately 120pt)
+                    Spacer()
+                        .frame(height: 120)
+                    
+                    dropdownView
+                        .padding(.horizontal)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)).animation(.easeInOut(duration: 0.2)))
+                        .allowsHitTesting(true)
+                    
+                    Spacer()
+                }
+                .zIndex(1000)
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -303,19 +315,31 @@ struct ContentView: View {
         HStack {
             Text("SL Tracker")
                 .font(.largeTitle)
-                .fontWeight(.bold)
-                .foregroundColor(.primary)
+                .bold()
+                .foregroundStyle(.primary)
             
             Spacer()
             
             // Refresh button for home screen
             if !viewModel.departures.isEmpty {
-                Button(action: refreshDepartures) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.blue)
-                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                        .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                Group {
+                    if #available(iOS 26, *) {
+                        Button(action: refreshDepartures) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 16, weight: .medium))
+                                .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                                .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                        }
+                        .buttonStyle(.glass)
+                    } else {
+                        Button(action: refreshDepartures) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 16, weight: .medium))
+                                .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                                .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                        }
+                        .tint(.primary)
+                    }
                 }
             }
         }
@@ -327,33 +351,69 @@ struct ContentView: View {
     /// Custom navigation bar for search mode
     private var customNavigationBar: some View {
         HStack {
-            Button(action: resetSearch) {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .medium))
-                    Text("Back")
-                        .font(.system(size: 17, weight: .regular))
+            Group {
+                if #available(iOS 26, *) {
+                    Button(action: resetSearch) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Back")
+                                .font(.system(size: 17, weight: .regular))
+                        }
+                    }
+                    .buttonStyle(.glass)
+                } else {
+                    Button(action: resetSearch) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Back")
+                                .font(.system(size: 17, weight: .regular))
+                        }
+                    }
+                    .tint(.primary)
                 }
-                .foregroundColor(.blue)
             }
             
             Spacer()
             
             HStack(spacing: 16) {
                 // Pin/Unpin button
-                Button(action: { showingPinActionSheet = true }) {
-                    Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.blue)
+                Group {
+                    if #available(iOS 26, *) {
+                        Button(action: { showingPinActionSheet = true }) {
+                            Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .buttonStyle(.glass)
+                    } else {
+                        Button(action: { showingPinActionSheet = true }) {
+                            Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                        .tint(.primary)
+                    }
                 }
                 
                 // Refresh button with rotation animation
-                Button(action: refreshDepartures) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.blue)
-                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                        .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                Group {
+                    if #available(iOS 26, *) {
+                        Button(action: refreshDepartures) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 16, weight: .medium))
+                                .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                                .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                        }
+                        .buttonStyle(.glass)
+                    } else {
+                        Button(action: refreshDepartures) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 16, weight: .medium))
+                                .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                                .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                        }
+                        .tint(.primary)
+                    }
                 }
             }
         }
@@ -365,52 +425,42 @@ struct ContentView: View {
     /// The search bar section (without dropdown)
     private var searchBarSection: some View {
         VStack(spacing: 12) {
-            Button(action: {
-                isSearchFocused = true
-            }) {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 16, weight: .medium))
-                    
-                    TextField("Search for a station", text: $stationName)
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .focused($isSearchFocused)
-                        .onChange(of: stationName) { _, newValue in
-                            updateSuggestions(for: newValue)
-                        }
-                        .onSubmit {
-                            if let firstSuggestion = filteredStations.first {
-                                selectStation(firstSuggestion)
-                            }
-                        }
-                        .allowsHitTesting(true)
-                    
-                    if !stationName.isEmpty {
-                        Button(action: {
-                            stationName = ""
-                            filteredStations = []
-                            showingSuggestions = false
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
-                                .font(.system(size: 16))
-                        }
-                        .allowsHitTesting(true)
+            // Standard iOS search field with proper styling
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 15))
+                
+                TextField("Search for a station", text: $stationName)
+                    .textFieldStyle(.plain)
+                    .focused($isSearchFocused)
+                    .submitLabel(.search)
+                    .onChange(of: stationName) { _, newValue in
+                        updateSuggestions(for: newValue)
                     }
+                    .onSubmit {
+                        if let firstSuggestion = filteredStations.first {
+                            selectStation(firstSuggestion)
+                        }
+                    }
+                
+                if !stationName.isEmpty {
+                    Button {
+                        stationName = ""
+                        filteredStations = []
+                        showingSuggestions = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 15))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(isSearchMode ? Color(.systemGray5) : Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isSearchFocused ? Color.blue : (isSearchMode ? Color(.systemGray4) : Color.clear), lineWidth: isSearchMode ? 1 : 1.5)
-                )
             }
-            .buttonStyle(PlainButtonStyle())
-            
-            // Helper text removed - redundant with search field placeholder
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.systemGray6))
+            .clipShape(.rect(cornerRadius: 10))
         }
         .padding(.horizontal)
         .padding(.top, isSearchMode ? 8 : 0)
@@ -451,7 +501,7 @@ struct ContentView: View {
             
             Text("Loading departures...")
                 .font(.headline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .opacity(0.8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -463,14 +513,14 @@ struct ContentView: View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 40))
-                .foregroundColor(.orange)
+                .foregroundStyle(.orange)
             
             Text("Error")
                 .font(.headline)
             
             Text(message)
                 .font(.body)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             
             Button("Try Again") {
@@ -502,7 +552,7 @@ struct ContentView: View {
                                 // Add scroll-based fade effect
                                 .modifier(ScrollFadeModifier(index: index))
                             
-                            if index < viewModel.departures.count - 1 {
+                            if departure.id != viewModel.departures.last?.id {
                                 Divider()
                                     .padding(.leading)
                             }
@@ -510,9 +560,6 @@ struct ContentView: View {
                     }
                 }
                 .coordinateSpace(name: "scroll") // Add coordinate space for scroll tracking
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
             }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.35)))
@@ -523,14 +570,14 @@ struct ContentView: View {
         VStack(spacing: 16) {
             Image(systemName: "tram")
                 .font(.system(size: 40))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             
             Text("No departures found")
                 .font(.headline)
             
             Text("No metro departures found for \(viewModel.currentStation). Try a different station or check the station name.")
                 .font(.body)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -544,7 +591,7 @@ struct ContentView: View {
                 VStack(spacing: 24) {
                     Image(systemName: "tram.fill")
                         .font(.system(size: 48))
-                        .foregroundColor(.blue)
+                        .foregroundStyle(.blue)
                         .scaleEffect(1.0)
                         .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: UUID())
                     
@@ -576,21 +623,31 @@ struct ContentView: View {
             .padding(.horizontal)
             
             LazyVStack(spacing: 0) {
-                ForEach(Array(pinnedManager.pinnedStations.enumerated()), id: \.element.id) { index, station in
+                ForEach(pinnedManager.pinnedStations, id: \.id) { station in
                     PinnedStationRow(
                         station: station,
                         onTap: { selectPinnedStation(station) },
                         onUnpin: { pinnedManager.unpinStation(id: station.id) }
                     )
                     
-                    if index < pinnedManager.pinnedStations.count - 1 {
+                    if station.id != pinnedManager.pinnedStations.last?.id {
                         Divider()
                             .padding(.leading, 60)
                     }
                 }
             }
-            .background(Color(.systemGray6))
-            .cornerRadius(12)
+            .background {
+                if #available(iOS 26, *) {
+                    // Use Liquid Glass effect on iOS 26+
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(.clear)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+                } else {
+                    // Fallback for older iOS versions
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray6))
+                }
+            }
             .padding(.horizontal)
             
             Spacer()
@@ -599,80 +656,62 @@ struct ContentView: View {
     
     /// Footer section
     private var footerSection: some View {
-        Text("Lovingly made by Erik in Stockholm ❤️‍🔥")
-            .font(.caption2)
-            .foregroundColor(.secondary)
-            .padding(.bottom, 20)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                triggerEasterEgg()
-            }
+        Button {
+            triggerEasterEgg()
+        } label: {
+            Text("Lovingly made by Erik in Stockholm ❤️‍🔥")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .padding(.bottom, 20)
     }
     
-    /// Dropdown view that follows SwiftUI's natural layout
+    /// Dropdown view using standard SwiftUI List
     private var dropdownView: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(filteredStations.enumerated()), id: \.element) { index, station in
-                Button(action: {
+        List {
+            ForEach(filteredStations, id: \.self) { station in
+                Button {
                     // Add haptic feedback for better UX
                     let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                     impactFeedback.impactOccurred()
                     
                     selectStation(station)
-                }) {
+                } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "tram.fill")
-                            .foregroundColor(.blue)
+                            .foregroundStyle(.secondary)
                             .font(.system(size: 14, weight: .medium))
                         
                         Text(station)
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                             .font(.system(size: 16))
-                        
-                        Spacer()
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.clear)
-                            .animation(.easeInOut(duration: 0.15), value: isSearchFocused)
-                    )
                 }
-                .buttonStyle(PlainButtonStyle())
-                // Staggered animation for each item
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .top)).animation(.easeInOut(duration: 0.2).delay(Double(index) * 0.03)),
-                    removal: .opacity.animation(.easeInOut(duration: 0.15))
-                ))
-                
-                if station != filteredStations.last {
-                    Divider()
-                        .padding(.leading, 44)
-                }
+                .buttonStyle(.plain)
             }
         }
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
-        .padding(.horizontal, isSearchMode ? 16 : 32) // Match context-specific padding
-        .scaleEffect(showingSuggestions ? 1.0 : 0.95)
-        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .frame(height: min(CGFloat(filteredStations.count) * 44, 352)) // Max 8 items at 44pt each
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(.rect(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
+    }
     
     // MARK: - Actions
     
     /// Updates the station suggestions based on user input
     private func updateSuggestions(for input: String) {
-        let trimmedInput = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let trimmedInput = input.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if trimmedInput.isEmpty {
             filteredStations = []
             showingSuggestions = false
         } else {
-            // Filter stations that contain the input (case-insensitive)
+            // Filter stations that contain the input (case-insensitive, handles diacritics)
             filteredStations = allStations.filter { station in
-                station.lowercased().contains(trimmedInput)
+                station.localizedStandardContains(trimmedInput)
             }
             
             // Limit to first 8 suggestions for better UX
@@ -697,7 +736,8 @@ struct ContentView: View {
         }
         
         // Search for departures with slight delay for smooth transition
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
             searchDepartures()
         }
     }
@@ -711,7 +751,8 @@ struct ContentView: View {
             isSearchMode = true
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        Task {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
             searchDepartures()
         }
     }
@@ -775,7 +816,8 @@ struct ContentView: View {
         easterEggTapCount += 1
         
         // Reset tap count after 3 seconds if not completed
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
             if easterEggTapCount < 3 {
                 easterEggTapCount = 0
             }
@@ -815,17 +857,17 @@ struct PinnedStationRow: View {
             HStack(spacing: 16) {
                 // Station icon with line color if available
                 Image(systemName: "tram.fill")
-                    .foregroundColor(.blue)
+                    .foregroundStyle(.blue)
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 28, height: 28)
                     .background(Color(.systemGray5))
-                    .cornerRadius(6)
+                    .clipShape(.rect(cornerRadius: 6))
                     .scaleEffect(isPressed ? 0.95 : 1.0)
                 
                 // Station name
                 Text(station.name)
                     .font(.system(size: 16))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 
                 Spacer()
@@ -833,7 +875,7 @@ struct PinnedStationRow: View {
                 // Chevron
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isPressed ? 5 : 0))
             }
             .padding(.horizontal, 16)
@@ -877,17 +919,17 @@ struct DepartureRowView: View {
                 // Colored line number box with subtle animation
                 Text(departure.line.designation)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .frame(width: 36, height: 28)
                     .background(lineColor(for: departure.line.designation))
-                    .cornerRadius(8)
+                    .clipShape(.rect(cornerRadius: 8))
                     .shadow(color: lineColor(for: departure.line.designation).opacity(0.3), radius: 4, x: 0, y: 2)
                     .scaleEffect(isVisible ? 1.0 : 0.8)
                     .opacity(isVisible ? 1.0 : 0.0)
                 
                 Text(departure.destination)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .opacity(isVisible ? 1.0 : 0.0)
             }
@@ -898,13 +940,13 @@ struct DepartureRowView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(departure.display)
                     .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
+                    .foregroundStyle(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
                     .scaleEffect(departure.display.contains("Nu") ? (isVisible ? 1.1 : 1.0) : 1.0)
                     .opacity(isVisible ? 1.0 : 0.0)
                 
                 Text("Platform \(departure.stopPoint.designation ?? "N/A")")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .opacity(isVisible ? 1.0 : 0.0)
             }
         }
@@ -978,12 +1020,12 @@ struct ThankYouView: View {
                         // Simple title
                         Text("Dedication")
                             .font(.title)
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                         
                         // Simple subtitle
                         Text("This app is dedicated to Johanna, and my friends Alex, Nick, and Elin from Katerina Ol Cafe. The best bar in Stockholm.")
                             .font(.body)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
                     }
@@ -996,7 +1038,7 @@ struct ThankYouView: View {
                             isVisible = false
                         }
                     }
-                    .foregroundColor(.blue)
+                    .tint(.primary)
                 }
                 .padding(.vertical, 80)
             }
@@ -1044,7 +1086,8 @@ struct ScrollFadeModifier: ViewModifier {
             )
             .onAppear {
                 // Initial fade in with minimal delay for snappier response
-                DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * staggerDelay) {
+                Task {
+                    try? await Task.sleep(nanoseconds: UInt64(Double(index) * staggerDelay * 1_000_000_000))
                     withAnimation(.easeOut(duration: fadeInDuration)) {
                         isVisible = true
                     }

@@ -167,8 +167,9 @@ struct PinnedStation: Codable, Identifiable, Equatable {
 
 /// Manager for handling pinned stations with persistence
 @MainActor
-class PinnedStationsManager: ObservableObject {
-    @Published var pinnedStations: [PinnedStation] = []
+@Observable
+final class PinnedStationsManager {
+    var pinnedStations: [PinnedStation] = []
     
     private let maxPinnedStations = 8
     private let storageKey = "pinnedStations"

@@ -10,21 +10,22 @@ import WidgetKit
 
 /// Manages the state and business logic for metro departures
 @MainActor
-class DeparturesViewModel: ObservableObject {
+@Observable
+final class DeparturesViewModel {
     
-    // MARK: - Published Properties
+    // MARK: - Properties
     
     /// The list of metro departures to display
-    @Published var departures: [Departure] = []
+    var departures: [Departure] = []
     
     /// Whether the app is currently loading data
-    @Published var isLoading = false
+    var isLoading = false
     
     /// Any error message to display to the user
-    @Published var errorMessage: String?
+    var errorMessage: String?
     
     /// The current station name being displayed
-    @Published var currentStation = ""
+    var currentStation = ""
     
     // MARK: - Private Properties
     
