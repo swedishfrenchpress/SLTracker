@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 // MARK: - Preference Keys for Dynamic Layout
 
@@ -65,6 +64,9 @@ struct ContentView: View {
     /// Easter egg state variables
     @State private var showingThankYou = false
     @State private var easterEggTapCount = 0
+
+    /// Empty state animation flag
+    @State private var isEmptyStatePulsing = false
     
     /// All available Stockholm Metro stations
     private let allStations = [
@@ -251,16 +253,14 @@ struct ContentView: View {
                         
                         Spacer()
                     }
-                    .zIndex(1000)
+                    .zIndex(1)
                 }
             }
         }
         .onPreferenceChange(HeaderHeightPreferenceKey.self) { height in
-            print("Header height measured: \(height)")
             headerHeight = height
         }
         .onPreferenceChange(SearchBarHeightPreferenceKey.self) { height in
-            print("Search bar height measured: \(height)")
             searchBarHeight = height
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -268,44 +268,32 @@ struct ContentView: View {
     
     /// Search results view with tap-to-dismiss functionality
     private var searchResultsView: some View {
-        ZStack(alignment: .top) {
-            // Main content
-            VStack(spacing: 0) {
-                // Custom navigation bar
-                customNavigationBar
-                
-                // Search Section
-                searchBarSection
-                
-                // Content Section  
-                contentSection
-                
-                Spacer()
-            }
-            .padding(.horizontal)
-            .contentShape(Rectangle()) // Make entire area tappable
-            .onTapGesture {
-                // Dismiss dropdown and keyboard when tapping outside
-                if showingSuggestions {
-                    dismissDropdownAndKeyboard()
-                }
+        VStack(spacing: 0) {
+            // Custom navigation bar
+            customNavigationBar
+            
+            // Search Section
+            searchBarSection
+            
+            // Dropdown appears in flow (pushes results down)
+            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+                dropdownView
+                    .padding(.top, 8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)).animation(.easeInOut(duration: 0.2)))
+                    .allowsHitTesting(true)
             }
             
-            // Dropdown overlay - appears over content, not pushing it down
-            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
-                VStack {
-                    // Position below navigation bar and search field (approximately 120pt)
-                    Spacer()
-                        .frame(height: 120)
-                    
-                    dropdownView
-                        .padding(.horizontal)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)).animation(.easeInOut(duration: 0.2)))
-                        .allowsHitTesting(true)
-                    
-                    Spacer()
-                }
-                .zIndex(1000)
+            // Content Section
+            contentSection
+            
+            Spacer()
+        }
+        .padding(.horizontal)
+        .contentShape(Rectangle()) // Make entire area tappable
+        .onTapGesture {
+            // Dismiss dropdown and keyboard when tapping outside
+            if showingSuggestions {
+                dismissDropdownAndKeyboard()
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
@@ -332,6 +320,7 @@ struct ContentView: View {
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
                         .buttonStyle(.glass)
+                        .accessibilityLabel("Refresh departures")
                     } else {
                         Button(action: refreshDepartures) {
                             Image(systemName: "arrow.clockwise")
@@ -340,6 +329,7 @@ struct ContentView: View {
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
                         .tint(.primary)
+                        .accessibilityLabel("Refresh departures")
                     }
                 }
             }
@@ -387,12 +377,14 @@ struct ContentView: View {
                                 .font(.system(size: 16, weight: .medium))
                         }
                         .buttonStyle(.glass)
+                        .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
                     } else {
                         Button(action: { showingPinActionSheet = true }) {
                             Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
                                 .font(.system(size: 16, weight: .medium))
                         }
                         .tint(.primary)
+                        .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
                     }
                 }
                 
@@ -406,6 +398,7 @@ struct ContentView: View {
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
                         .buttonStyle(.glass)
+                        .accessibilityLabel("Refresh departures")
                     } else {
                         Button(action: refreshDepartures) {
                             Image(systemName: "arrow.clockwise")
@@ -414,6 +407,7 @@ struct ContentView: View {
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
                         .tint(.primary)
+                        .accessibilityLabel("Refresh departures")
                     }
                 }
             }
@@ -452,13 +446,13 @@ struct ContentView: View {
                         filteredStations = []
                         showingSuggestions = false
                         isSearchFocused = false
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                             .font(.system(size: 15))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, 12)
@@ -596,8 +590,14 @@ struct ContentView: View {
                     Image(systemName: "tram.fill")
                         .font(.system(size: 48))
                         .foregroundStyle(.blue)
-                        .scaleEffect(1.0)
-                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: UUID())
+                        .scaleEffect(isEmptyStatePulsing ? 1.05 : 1.0)
+                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isEmptyStatePulsing)
+                        .onAppear {
+                            isEmptyStatePulsing = true
+                        }
+                        .onDisappear {
+                            isEmptyStatePulsing = false
+                        }
                     
                     Text("Ready to roll?")
                         .font(.title2)
@@ -671,39 +671,49 @@ struct ContentView: View {
         .padding(.bottom, 20)
     }
     
-    /// Dropdown view using standard SwiftUI List
+    /// Dropdown view using ScrollView + LazyVStack for stability
     private var dropdownView: some View {
         ZStack {
             // Background that matches app background
             Color(.systemBackground)
             
-            List {
-                ForEach(filteredStations, id: \.self) { station in
-                    Button {
-                        // Add haptic feedback for better UX
-                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                        impactFeedback.impactOccurred()
-                        
-                        selectStation(station)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "tram.fill")
-                                .foregroundStyle(.secondary)
-                                .font(.system(size: 14, weight: .medium))
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredStations.indices, id: \.self) { index in
+                        let station = filteredStations[index]
+                        Button {
+                            // Add haptic feedback for better UX
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
                             
-                            Text(station)
-                                .foregroundStyle(.primary)
-                                .font(.system(size: 16))
+                            selectStation(station)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "tram.fill")
+                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 14, weight: .medium))
+                                
+                                Text(station)
+                                    .foregroundStyle(.primary)
+                                    .font(.system(size: 16))
+                            }
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        
+                        // Divider between rows (not after the last row)
+                        if index < filteredStations.count - 1 {
+                            Divider()
+                                .background(Color(.separator))
                         }
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(Color.clear)
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
         }
-        .frame(height: min(CGFloat(filteredStations.count) * 44, 352)) // Max 8 items at 44pt each
+        // Keep dropdown height consistent with row padding
+        .frame(height: min(CGFloat(filteredStations.count) * 52, 416)) // Max 8 items at 52pt each
         .clipShape(.rect(cornerRadius: 12))
         .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
     }
@@ -735,7 +745,6 @@ struct ContentView: View {
     private func selectStation(_ station: String) {
         // Dismiss keyboard first
         isSearchFocused = false
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         
         // COMPLETELY clear all dropdown state
         clearDropdownState()
@@ -781,7 +790,6 @@ struct ContentView: View {
     private func dismissDropdownAndKeyboard() {
         // Dismiss keyboard first, before animation
         isSearchFocused = false
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         
         withAnimation(.easeInOut(duration: 0.25)) {
             showingSuggestions = false
@@ -811,7 +819,6 @@ struct ContentView: View {
     private func resetSearch() {
         // Dismiss keyboard first
         isSearchFocused = false
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         
         clearDropdownState()
         

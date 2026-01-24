@@ -66,12 +66,12 @@ struct SLTrackerWidgetEntryView: View {
             // Header with station name and refresh info
             HStack {
                 Image(systemName: "tram.fill")
-                    .foregroundColor(.blue)
+                    .foregroundStyle(.blue)
                     .font(.system(size: 14, weight: .medium))
                 
                 Text(stationName)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 
                 Spacer()
@@ -80,11 +80,11 @@ struct SLTrackerWidgetEntryView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 8, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     
                     Text(timeString(from: entry.lastUpdated))
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 12)
@@ -112,15 +112,15 @@ struct SLTrackerWidgetEntryView: View {
             // Line number
             Text(departure.line.designation)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(width: 24, height: 20)
                 .background(lineColor(for: departure.line.designation))
-                .cornerRadius(4)
+                .clipShape(.rect(cornerRadius: 4))
             
             // Destination
             Text(departure.destination)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
             
             Spacer()
@@ -128,7 +128,7 @@ struct SLTrackerWidgetEntryView: View {
             // Time - show actual time instead of relative time
             Text(formatDepartureTime(departure.expected))
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.blue)
+                .foregroundStyle(.blue)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
@@ -139,15 +139,15 @@ struct SLTrackerWidgetEntryView: View {
         VStack(spacing: 8) {
             Image(systemName: "tram")
                 .font(.system(size: 24))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             
             Text("No departures")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
             
             Text(stationName)
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -158,15 +158,15 @@ struct SLTrackerWidgetEntryView: View {
         VStack(spacing: 8) {
             Image(systemName: "pin")
                 .font(.system(size: 24))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             
             Text("Pin a station")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
             
             Text("Add a favorite station in the app")
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
         }
@@ -179,11 +179,11 @@ struct SLTrackerWidgetEntryView: View {
         VStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 24))
-                .foregroundColor(.red)
+                .foregroundStyle(.red)
             
             Text("Error: \(errorMessage)")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
         }
@@ -213,7 +213,6 @@ struct SLTrackerWidgetEntryView: View {
         // Use current locale to respect user's 12/24 hour preference
         formatter.locale = Locale.current
         let timeString = formatter.string(from: date)
-        print("Widget timeString: \(timeString) from date: \(date)")
         return timeString
     }
     
