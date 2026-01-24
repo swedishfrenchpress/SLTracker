@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - Preference Keys for Dynamic Layout
 
@@ -446,9 +447,12 @@ struct ContentView: View {
                 
                 if !stationName.isEmpty {
                     Button {
+                        // Clear text and dismiss keyboard (standard iOS behavior)
                         stationName = ""
                         filteredStations = []
                         showingSuggestions = false
+                        isSearchFocused = false
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
@@ -669,32 +673,37 @@ struct ContentView: View {
     
     /// Dropdown view using standard SwiftUI List
     private var dropdownView: some View {
-        List {
-            ForEach(filteredStations, id: \.self) { station in
-                Button {
-                    // Add haptic feedback for better UX
-                    let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                    impactFeedback.impactOccurred()
-                    
-                    selectStation(station)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "tram.fill")
-                            .foregroundStyle(.secondary)
-                            .font(.system(size: 14, weight: .medium))
+        ZStack {
+            // Background that matches app background
+            Color(.systemBackground)
+            
+            List {
+                ForEach(filteredStations, id: \.self) { station in
+                    Button {
+                        // Add haptic feedback for better UX
+                        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                        impactFeedback.impactOccurred()
                         
-                        Text(station)
-                            .foregroundStyle(.primary)
-                            .font(.system(size: 16))
+                        selectStation(station)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "tram.fill")
+                                .foregroundStyle(.secondary)
+                                .font(.system(size: 14, weight: .medium))
+                            
+                            Text(station)
+                                .foregroundStyle(.primary)
+                                .font(.system(size: 16))
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
                 }
-                .buttonStyle(.plain)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .frame(height: min(CGFloat(filteredStations.count) * 44, 352)) // Max 8 items at 44pt each
-        .background(Color(.secondarySystemGroupedBackground))
         .clipShape(.rect(cornerRadius: 12))
         .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
     }
@@ -724,6 +733,10 @@ struct ContentView: View {
     
     /// Selects a station and transitions to search mode
     private func selectStation(_ station: String) {
+        // Dismiss keyboard first
+        isSearchFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        
         // COMPLETELY clear all dropdown state
         clearDropdownState()
         
@@ -766,16 +779,16 @@ struct ContentView: View {
     
     /// Dismisses dropdown and keyboard when tapping outside
     private func dismissDropdownAndKeyboard() {
+        // Dismiss keyboard first, before animation
+        isSearchFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        
         withAnimation(.easeInOut(duration: 0.25)) {
             showingSuggestions = false
-            isSearchFocused = false
         }
         
         // Clear filtered stations
         filteredStations = []
-        
-        // Dismiss keyboard
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
     
     /// Gets the current site ID for the selected station
@@ -796,6 +809,10 @@ struct ContentView: View {
     
     /// Resets the search and returns to initial state
     private func resetSearch() {
+        // Dismiss keyboard first
+        isSearchFocused = false
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        
         clearDropdownState()
         
         withAnimation(.easeInOut(duration: 0.35)) {
