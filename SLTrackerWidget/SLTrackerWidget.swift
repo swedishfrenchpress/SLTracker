@@ -114,7 +114,7 @@ struct SLTrackerWidgetEntryView: View {
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
                 .frame(width: 24, height: 20)
-                .background(lineColor(for: departure.line.designation))
+                .background(lineColor(for: departure))
                 .clipShape(.rect(cornerRadius: 4))
             
             // Destination
@@ -191,17 +191,21 @@ struct SLTrackerWidgetEntryView: View {
         .padding(.horizontal, 12)
     }
     
-    /// Returns the appropriate color for each metro line
-    private func lineColor(for lineNumber: String) -> Color {
-        switch lineNumber {
-        case "13", "14":
-            return Color.red // Red line
-        case "17", "18", "19":
-            return Color.green // Green line
-        case "10", "11":
-            return Color.blue // Blue line
-        default:
-            return Color.gray // Default for unknown lines
+    /// Returns the appropriate color based on transport mode and line
+    private func lineColor(for departure: Departure) -> Color {
+        switch departure.line.transportMode {
+        case "METRO":
+            switch departure.line.designation {
+            case "13", "14": return .red
+            case "17", "18", "19": return .green
+            case "10", "11": return .blue
+            default: return .gray
+            }
+        case "TRAM": return .orange
+        case "BUS": return .indigo
+        case "TRAIN": return .purple
+        case "SHIP": return .teal
+        default: return .gray
         }
     }
     
@@ -332,8 +336,10 @@ struct SLTrackerWidgetProvider: TimelineProvider {
         // Fetch departures for the first station
         do {
             let apiManager = APIManager.shared
-            let departures = try await apiManager.fetchMetroDepartures(for: firstStation.name)
-            
+            let allDepartures = try await apiManager.fetchDepartures(for: firstStation.id)
+            // Sort by expected time (ISO 8601 strings sort chronologically)
+            let departures = allDepartures.sorted { $0.expected < $1.expected }
+
             let entry = SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: firstStation.name,

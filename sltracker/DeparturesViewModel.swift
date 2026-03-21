@@ -26,31 +26,27 @@ final class DeparturesViewModel {
     
     /// The current station name being displayed
     var currentStation = ""
-    
+
+    /// The current site ID being displayed
+    var currentSiteID = ""
+
     // MARK: - Private Properties
-    
+
     /// The API manager for making network requests
     private let apiManager = APIManager()
-    
+
     // MARK: - Public Methods
-    
-    /// Fetches metro departures for a specific station
-    /// - Parameter stationName: The name of the station to get departures for
-    func fetchDepartures(for stationName: String) {
-        // Clear any previous errors
+
+    /// Fetches all departures for a specific site
+    func fetchDepartures(for siteID: String, stationName: String) {
         errorMessage = nil
-        
-        // Set loading state
         isLoading = true
-        
-        // Update the current station
         currentStation = stationName
-        
-        // Use Task to handle the async API call
+        currentSiteID = siteID
+
         Task {
             do {
-                // Fetch departures from the API
-                let fetchedDepartures = try await apiManager.fetchMetroDepartures(for: stationName)
+                let fetchedDepartures = try await apiManager.fetchDepartures(for: siteID)
                 
                 // Filter out departures that are already in the past
                 let now = Date()

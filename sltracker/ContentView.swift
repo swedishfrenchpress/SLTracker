@@ -43,7 +43,10 @@ struct ContentView: View {
     @State private var showingSuggestions = false
     
     /// The filtered list of station suggestions
-    @State private var filteredStations: [String] = []
+    @State private var filteredStations: [Site] = []
+
+    /// The current site ID for the selected station
+    @State private var currentSiteID = ""
     
     /// Whether the search field is focused
     @FocusState private var isSearchFocused: Bool
@@ -68,64 +71,7 @@ struct ContentView: View {
     /// Empty state animation flag
     @State private var isEmptyStatePulsing = false
     
-    /// All available Stockholm Metro stations
-    private let allStations = [
-        // Core Metro Stations (served by multiple lines)
-        "T-Centralen",
-        
-        // RED LINE (Röda linjen) - Lines 13 & 14
-        // Line 13: Norsborg ↔ Ropsten
-        // Line 14: Fruängen ↔ Mörby centrum
-        
-        // Southbound from T-Centralen (Line 13/14)
-        "Gamla stan", "Slussen", "Mariatorget", "Medborgarplatsen", "Skanstull",
-        "Gullmarsplan", "Skärmarbrink", "Blåsut", "Sandsborg", "Skogskyrkogården",
-        "Tallkrogen", "Gubbängen", "Hökarängen", "Farsta", "Farsta strand",
-        "Hammarbyhöjden", "Björkhagen", "Kärrtorp", "Bagarmossen", "Skarpnäck",
-        
-        // Northbound from T-Centralen (Line 13/14)
-        "Östermalmstorg", "Stadion", "Tekniska högskolan", "Universitetet", "Bergshamra",
-        "Danderyds sjukhus", "Mörby centrum", "Ropsten", "Gärdet", "Karlaplan",
-        
-        // Line 13 specific stations (Norsborg branch)
-        "Norsborg", "Hallunda", "Alby", "Fittja", "Masmo", "Vårberg", "Vårby gård",
-        "Aspudden", "Örnsberg", "Axelsberg", "Mälarhöjden", "Bredäng", "Sätra",
-        "Skärholmen", "Vårby",
-        
-        // Line 14 specific stations (Fruängen branch)
-        "Fruängen", "Västertorp", "Hägerstensåsen", "Telefonplan", "Midsommarkransen",
-        "Globen", "Enskede gård",
-        
-        // GREEN LINE (Gröna linjen) - Lines 17, 18 & 19
-        // Line 17: Åkeshov ↔ Skarpnäck
-        // Line 18: Alvik ↔ Farsta strand
-        // Line 19: Hässelby strand ↔ Hagsätra
-        
-        // Westbound from T-Centralen (Line 17/18/19)
-        "Hässelby strand", "Hässelby gård", "Johannelund", "Vällingby", "Råcksta",
-        "Blackeberg", "Islandstorget", "Ängbyplan", "Åkeshov", "Brommaplan",
-        "Abrahamsberg", "Stora mossen", "Alvik", "Kristineberg", "Thorildsplan",
-        "Fridhemsplan", "Odenplan", "Rådmansgatan", "Hötorget",
-        
-        // Line 19 specific stations (Hagsätra branch)
-        "Hagsätra", "Rågsved", "Huddinge", "Flemingsberg", "Tullinge", "Tumba",
-        "Rönninge", "Österhaninge", "Handen", "Vendelsö", "Trångsund", "Skogås",
-        
-        // BLUE LINE (Blåa linjen) - Lines 10 & 11
-        // Line 10: Kungsträdgården ↔ Hjulsta
-        // Line 11: Kungsträdgården ↔ Akalla
-        
-        // Northbound from Kungsträdgården (Line 10/11)
-        "Kungsträdgården", "Rådhuset", "Stadshagen", "S:t Eriksplan", "Solnacentrum",
-        "Västra skogen", "Huvudsta", "Solna strand", "Sundbybergs centrum", "Duvbo",
-        "Sollentuna", "Rösersberg",
-        
-        // Line 10 specific stations (Hjulsta branch)
-        "Hjulsta", "Tensta", "Rinkeby", "Spånga", "Sollentuna centrum",
-        
-        // Line 11 specific stations (Akalla branch)
-        "Akalla", "Kista", "Husby", "Kungens kurva"
-    ]
+    // Station data is now loaded from all_sites.json via SiteStore
     
     // MARK: - Body
     
@@ -162,9 +108,9 @@ struct ContentView: View {
             ThankYouView(isVisible: $showingThankYou)
         )
         .onChange(of: navigationState.shouldNavigateToStation) { _, shouldNavigate in
-            if shouldNavigate, let stationName = navigationState.targetStation {
-                // Navigate to the station from widget
-                selectStation(stationName)
+            if shouldNavigate, let name = navigationState.targetStation {
+                let siteID = SiteStore.shared.getSiteID(for: name) ?? ""
+                selectStation(name: name, siteID: siteID)
                 navigationState.clearNavigationTarget()
             }
         }
@@ -434,8 +380,8 @@ struct ContentView: View {
                         updateSuggestions(for: newValue)
                     }
                     .onSubmit {
-                        if let firstSuggestion = filteredStations.first {
-                            selectStation(firstSuggestion)
+                        if let firstSite = filteredStations.first {
+                            selectStation(name: firstSite.name, siteID: String(firstSite.id))
                         }
                     }
                 
@@ -529,35 +475,54 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    /// List of departures with smooth animations
+    /// List of departures grouped by transport mode
     private var departuresList: some View {
-        VStack(spacing: 0) {
-            // Departures list with scroll-based animations
+        let grouped = Dictionary(grouping: viewModel.departures) { $0.line.transportMode }
+        let modeOrder = ["METRO", "TRAM", "BUS", "TRAIN", "SHIP"]
+        let sortedModes = modeOrder.filter { grouped[$0] != nil }
+
+        return VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(viewModel.departures.enumerated()), id: \.element.id) { index, departure in
-                            DepartureRowView(departure: departure)
+                        ForEach(sortedModes, id: \.self) { mode in
+                            if let departures = grouped[mode] {
+                                // Section header
+                                HStack(spacing: 8) {
+                                    Image(systemName: transportModeIcon(for: mode))
+                                        .foregroundStyle(transportModeColor(for: mode))
+                                        .font(.system(size: 14, weight: .medium))
+                                    Text(transportModeName(for: mode))
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                }
                                 .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .id(departure.id) // Ensure unique ID for scroll tracking
-                                // Enhanced scroll-based fade animation
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .trailing))
-                                        .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
-                                    removal: .opacity.animation(.easeInOut(duration: 0.2))
-                                ))
-                                // Add scroll-based fade effect
-                                .modifier(ScrollFadeModifier(index: index))
-                            
-                            if departure.id != viewModel.departures.last?.id {
-                                Divider()
-                                    .padding(.leading)
+                                .padding(.top, mode == sortedModes.first ? 0 : 16)
+                                .padding(.bottom, 8)
+
+                                ForEach(Array(departures.enumerated()), id: \.element.id) { index, departure in
+                                    DepartureRowView(departure: departure)
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 8)
+                                        .id(departure.id)
+                                        .transition(.asymmetric(
+                                            insertion: .opacity.combined(with: .move(edge: .trailing))
+                                                .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
+                                            removal: .opacity.animation(.easeInOut(duration: 0.2))
+                                        ))
+                                        .modifier(ScrollFadeModifier(index: index))
+
+                                    if departure.id != departures.last?.id {
+                                        Divider()
+                                            .padding(.leading)
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                .coordinateSpace(name: "scroll") // Add coordinate space for scroll tracking
+                .coordinateSpace(name: "scroll")
             }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.35)))
@@ -573,7 +538,7 @@ struct ContentView: View {
             Text("No departures found")
                 .font(.headline)
             
-            Text("No metro departures found for \(viewModel.currentStation). Try a different station or check the station name.")
+            Text("No departures found for \(viewModel.currentStation). Try a different station or check the station name.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -680,20 +645,18 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(filteredStations.indices, id: \.self) { index in
-                        let station = filteredStations[index]
+                        let site = filteredStations[index]
                         Button {
-                            // Add haptic feedback for better UX
                             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                             impactFeedback.impactOccurred()
-                            
-                            selectStation(station)
+                            selectStation(name: site.name, siteID: String(site.id))
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "tram.fill")
                                     .foregroundStyle(.secondary)
                                     .font(.system(size: 14, weight: .medium))
-                                
-                                Text(station)
+
+                                Text(site.name)
                                     .foregroundStyle(.primary)
                                     .font(.system(size: 16))
                             }
@@ -702,8 +665,7 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
-                        
-                        // Divider between rows (not after the last row)
+
                         if index < filteredStations.count - 1 {
                             Divider()
                                 .background(Color(.separator))
@@ -718,65 +680,76 @@ struct ContentView: View {
         .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 4)
     }
     
+    // MARK: - Transport Mode Helpers
+
+    private func transportModeIcon(for mode: String) -> String {
+        switch mode {
+        case "METRO": return "tram.fill"
+        case "TRAM": return "cablecar"
+        case "BUS": return "bus.fill"
+        case "TRAIN": return "train.side.front.car"
+        case "SHIP": return "ferry.fill"
+        default: return "questionmark.circle"
+        }
+    }
+
+    private func transportModeName(for mode: String) -> String {
+        switch mode {
+        case "METRO": return "Metro"
+        case "TRAM": return "Tram"
+        case "BUS": return "Bus"
+        case "TRAIN": return "Train"
+        case "SHIP": return "Ferry"
+        default: return mode
+        }
+    }
+
+    private func transportModeColor(for mode: String) -> Color {
+        switch mode {
+        case "METRO": return .blue
+        case "TRAM": return .orange
+        case "BUS": return .indigo
+        case "TRAIN": return .purple
+        case "SHIP": return .teal
+        default: return .gray
+        }
+    }
+
     // MARK: - Actions
-    
+
     /// Updates the station suggestions based on user input
     private func updateSuggestions(for input: String) {
         let trimmedInput = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
         if trimmedInput.isEmpty {
             filteredStations = []
             showingSuggestions = false
         } else {
-            // Filter stations that contain the input (case-insensitive, handles diacritics)
-            filteredStations = allStations.filter { station in
-                station.localizedStandardContains(trimmedInput)
-            }
-            
-            // Limit to first 8 suggestions for better UX
-            filteredStations = Array(filteredStations.prefix(8))
-            
-            // Show suggestions if we have matches
+            filteredStations = SiteStore.shared.search(query: trimmedInput)
             showingSuggestions = !filteredStations.isEmpty
         }
     }
     
     /// Selects a station and transitions to search mode
-    private func selectStation(_ station: String) {
-        // Dismiss keyboard first
+    private func selectStation(name: String, siteID: String) {
         isSearchFocused = false
-        
-        // COMPLETELY clear all dropdown state
         clearDropdownState()
-        
-        // Set the station name
-        stationName = station
-        
-        // Animate to search mode with beautiful Macadamia-style transition
+        stationName = name
+        currentSiteID = siteID
+
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = true
         }
-        
-        // Search for departures with slight delay for smooth transition
+
         Task {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+            try? await Task.sleep(nanoseconds: 100_000_000)
             searchDepartures()
         }
     }
-    
+
     /// Selects a pinned station
     private func selectPinnedStation(_ station: PinnedStation) {
-        clearDropdownState()
-        stationName = station.name
-        
-        withAnimation(.easeInOut(duration: 0.35)) {
-            isSearchMode = true
-        }
-        
-        Task {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-            searchDepartures()
-        }
+        selectStation(name: station.name, siteID: station.id)
     }
     
     /// Completely clears all dropdown-related state
@@ -801,18 +774,16 @@ struct ContentView: View {
     
     /// Gets the current site ID for the selected station
     private func getCurrentSiteID() -> String {
-        return APIManager.shared.getSiteID(for: stationName)
+        return currentSiteID
     }
-    
-    /// Searches for departures using the entered station name
+
+    /// Searches for departures using the current site ID
     private func searchDepartures() {
         let trimmedName = stationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return }
-        
-        // Ensure dropdown is completely cleared
+        guard !trimmedName.isEmpty, !currentSiteID.isEmpty else { return }
+
         clearDropdownState()
-        
-        viewModel.fetchDepartures(for: trimmedName)
+        viewModel.fetchDepartures(for: currentSiteID, stationName: trimmedName)
     }
     
     /// Resets the search and returns to initial state
@@ -825,14 +796,15 @@ struct ContentView: View {
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = false
             stationName = ""
+            currentSiteID = ""
             viewModel.clearDepartures()
         }
     }
     
     /// Refreshes the current departures by calling the API again
     private func refreshDepartures() {
-        guard !viewModel.currentStation.isEmpty else { return }
-        viewModel.fetchDepartures(for: viewModel.currentStation)
+        guard !viewModel.currentSiteID.isEmpty else { return }
+        viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: viewModel.currentStation)
     }
     
     /// Triggers the easter egg (requires 3 taps)
@@ -945,9 +917,9 @@ struct DepartureRowView: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 28)
-                    .background(lineColor(for: departure.line.designation))
+                    .background(lineColor(for: departure))
                     .clipShape(.rect(cornerRadius: 8))
-                    .shadow(color: lineColor(for: departure.line.designation).opacity(0.3), radius: 4, x: 0, y: 2)
+                    .shadow(color: lineColor(for: departure).opacity(0.3), radius: 4, x: 0, y: 2)
                     .scaleEffect(isVisible ? 1.0 : 0.8)
                     .opacity(isVisible ? 1.0 : 0.0)
                 
@@ -989,17 +961,21 @@ struct DepartureRowView: View {
         }
     }
     
-    /// Returns the appropriate color for each metro line
-    private func lineColor(for lineNumber: String) -> Color {
-        switch lineNumber {
-        case "13", "14":
-            return Color.red // Red line
-        case "17", "18", "19":
-            return Color.green // Green line
-        case "10", "11":
-            return Color.blue // Blue line
-        default:
-            return Color.gray // Default for unknown lines
+    /// Returns the appropriate color based on transport mode and line
+    private func lineColor(for departure: Departure) -> Color {
+        switch departure.line.transportMode {
+        case "METRO":
+            switch departure.line.designation {
+            case "13", "14": return .red
+            case "17", "18", "19": return .green
+            case "10", "11": return .blue
+            default: return .gray
+            }
+        case "TRAM": return .orange
+        case "BUS": return .indigo
+        case "TRAIN": return .purple
+        case "SHIP": return .teal
+        default: return .gray
         }
     }
     
