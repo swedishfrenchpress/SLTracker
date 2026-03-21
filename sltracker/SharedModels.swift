@@ -157,11 +157,21 @@ struct PinnedStation: Codable, Identifiable, Equatable {
     let id: String // Site ID from API
     let name: String
     let pinnedAt: Date
-    
-    init(id: String, name: String) {
+    var transportModes: [String]
+
+    init(id: String, name: String, transportModes: [String] = ["METRO"]) {
         self.id = id
         self.name = name
         self.pinnedAt = Date()
+        self.transportModes = transportModes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        pinnedAt = try container.decode(Date.self, forKey: .pinnedAt)
+        transportModes = try container.decodeIfPresent([String].self, forKey: .transportModes) ?? ["METRO"]
     }
 }
 
@@ -214,11 +224,11 @@ final class PinnedStationsManager {
     }
     
     /// Pin a station
-    func pinStation(id: String, name: String) {
+    func pinStation(id: String, name: String, transportModes: [String] = ["METRO"]) {
         // Don't pin if already pinned
         guard !isStationPinned(id: id) else { return }
-        
-        let newStation = PinnedStation(id: id, name: name)
+
+        let newStation = PinnedStation(id: id, name: name, transportModes: transportModes)
         pinnedStations.insert(newStation, at: 0)
         
         // Remove oldest if over limit
@@ -236,11 +246,11 @@ final class PinnedStationsManager {
     }
     
     /// Toggle pin status
-    func togglePin(id: String, name: String) {
+    func togglePin(id: String, name: String, transportModes: [String] = ["METRO"]) {
         if isStationPinned(id: id) {
             unpinStation(id: id)
         } else {
-            pinStation(id: id, name: name)
+            pinStation(id: id, name: name, transportModes: transportModes)
         }
     }
 }

@@ -53,10 +53,7 @@ struct ContentView: View {
     
     /// Whether we're in search mode (station selected)
     @State private var isSearchMode = false
-    
-    /// Show action sheet for pinning
-    @State private var showingPinActionSheet = false
-    
+
     /// Animation state for smooth transitions
     @State private var searchBarOffset: CGFloat = 0
     
@@ -116,26 +113,6 @@ struct ContentView: View {
                 selectStation(name: name, siteID: siteID)
                 navigationState.clearNavigationTarget()
             }
-        }
-        .confirmationDialog(
-            stationName,
-            isPresented: $showingPinActionSheet,
-            titleVisibility: .visible
-        ) {
-            let currentSiteID = getCurrentSiteID()
-            let isPinned = pinnedManager.isStationPinned(id: currentSiteID)
-            
-            if isPinned {
-                Button("Unpin this station", role: .destructive) {
-                    pinnedManager.unpinStation(id: currentSiteID)
-                }
-            } else {
-                Button("Pin this station") {
-                    pinnedManager.pinStation(id: currentSiteID, name: stationName)
-                }
-            }
-            
-            Button("Cancel", role: .cancel) { }
         }
 
     }
@@ -321,16 +298,24 @@ struct ContentView: View {
                 // Pin/Unpin button
                 Group {
                     if #available(iOS 26, *) {
-                        Button(action: { showingPinActionSheet = true }) {
+                        Button(action: {
+                            let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
+                            pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
+                        }) {
                             Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
                                 .font(.system(size: 16, weight: .medium))
+                                .contentTransition(.symbolEffect(.replace))
                         }
                         .buttonStyle(.glass)
                         .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
                     } else {
-                        Button(action: { showingPinActionSheet = true }) {
+                        Button(action: {
+                            let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
+                            pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
+                        }) {
                             Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
                                 .font(.system(size: 16, weight: .medium))
+                                .contentTransition(.symbolEffect(.replace))
                         }
                         .tint(.primary)
                         .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
@@ -889,9 +874,9 @@ struct PinnedStationRow: View {
             onTap()
         }) {
             HStack(spacing: 16) {
-                // Station icon with line color if available
-                Image(systemName: "tram.fill")
-                    .foregroundStyle(.blue)
+                // Station icon based on transport modes
+                Image(systemName: stationIcon)
+                    .foregroundStyle(stationIconColor)
                     .font(.system(size: 16, weight: .medium))
                     .frame(width: 28, height: 28)
                     .background(Color(.systemGray5))
@@ -935,6 +920,60 @@ struct PinnedStationRow: View {
                 onUnpin()
             }
         }
+    }
+
+    private var stationIcon: String {
+        let modes = station.transportModes
+        if modes.contains("METRO") || modes.isEmpty { return "tram.fill" }
+        if modes.count == 1, let mode = modes.first {
+            switch mode {
+            case "TRAM": return "cablecar"
+            case "BUS": return "bus.fill"
+            case "TRAIN": return "train.side.front.car"
+            case "SHIP": return "ferry.fill"
+            default: return "tram.fill"
+            }
+        }
+        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
+        for mode in priority {
+            if modes.contains(mode) {
+                switch mode {
+                case "TRAM": return "cablecar"
+                case "BUS": return "bus.fill"
+                case "TRAIN": return "train.side.front.car"
+                case "SHIP": return "ferry.fill"
+                default: break
+                }
+            }
+        }
+        return "tram.fill"
+    }
+
+    private var stationIconColor: Color {
+        let modes = station.transportModes
+        if modes.contains("METRO") || modes.isEmpty { return .blue }
+        if modes.count == 1, let mode = modes.first {
+            switch mode {
+            case "TRAM": return .orange
+            case "BUS": return .indigo
+            case "TRAIN": return .purple
+            case "SHIP": return .teal
+            default: return .blue
+            }
+        }
+        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
+        for mode in priority {
+            if modes.contains(mode) {
+                switch mode {
+                case "TRAM": return .orange
+                case "BUS": return .indigo
+                case "TRAIN": return .purple
+                case "SHIP": return .teal
+                default: break
+                }
+            }
+        }
+        return .blue
     }
 }
 
@@ -1094,7 +1133,7 @@ struct ThankYouView: View {
                             .foregroundStyle(.primary)
                         
                         // Simple subtitle
-                        Text("This app is dedicated to Johanna, and my friends Alex, Nick, and Elin from Katerina Ol Cafe. The best bar in Stockholm.")
+                        Text("This app is dedicated to my friends Alex, Nick, and Elin from Katerina Ol Cafe. The best bar in Stockholm.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

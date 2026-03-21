@@ -156,11 +156,21 @@ struct PinnedStation: Codable, Identifiable, Equatable {
     let id: String // Site ID from API
     let name: String
     let pinnedAt: Date
-    
-    init(id: String, name: String) {
+    var transportModes: [String]
+
+    init(id: String, name: String, transportModes: [String] = ["METRO"]) {
         self.id = id
         self.name = name
         self.pinnedAt = Date()
+        self.transportModes = transportModes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        pinnedAt = try container.decode(Date.self, forKey: .pinnedAt)
+        transportModes = try container.decodeIfPresent([String].self, forKey: .transportModes) ?? ["METRO"]
     }
 }
 

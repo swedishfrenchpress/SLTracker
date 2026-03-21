@@ -65,8 +65,8 @@ struct SLTrackerWidgetEntryView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Header with station name and refresh info
             HStack {
-                Image(systemName: "tram.fill")
-                    .foregroundStyle(.blue)
+                Image(systemName: widgetIcon(for: departures))
+                    .foregroundStyle(widgetIconColor(for: departures))
                     .font(.system(size: 14, weight: .medium))
                 
                 Text(stationName)
@@ -209,6 +209,62 @@ struct SLTrackerWidgetEntryView: View {
         }
     }
     
+    /// Returns the appropriate icon based on the departures' transport modes
+    private func widgetIcon(for departures: [Departure]) -> String {
+        let modes = Set(departures.map { $0.line.transportMode })
+        if modes.contains("METRO") || modes.isEmpty { return "tram.fill" }
+        if modes.count == 1, let mode = modes.first {
+            switch mode {
+            case "TRAM": return "cablecar"
+            case "BUS": return "bus.fill"
+            case "TRAIN": return "train.side.front.car"
+            case "SHIP": return "ferry.fill"
+            default: return "tram.fill"
+            }
+        }
+        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
+        for mode in priority {
+            if modes.contains(mode) {
+                switch mode {
+                case "TRAM": return "cablecar"
+                case "BUS": return "bus.fill"
+                case "TRAIN": return "train.side.front.car"
+                case "SHIP": return "ferry.fill"
+                default: break
+                }
+            }
+        }
+        return "tram.fill"
+    }
+
+    /// Returns the appropriate icon color based on the departures' transport modes
+    private func widgetIconColor(for departures: [Departure]) -> Color {
+        let modes = Set(departures.map { $0.line.transportMode })
+        if modes.contains("METRO") || modes.isEmpty { return .blue }
+        if modes.count == 1, let mode = modes.first {
+            switch mode {
+            case "TRAM": return .orange
+            case "BUS": return .indigo
+            case "TRAIN": return .purple
+            case "SHIP": return .teal
+            default: return .blue
+            }
+        }
+        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
+        for mode in priority {
+            if modes.contains(mode) {
+                switch mode {
+                case "TRAM": return .orange
+                case "BUS": return .indigo
+                case "TRAIN": return .purple
+                case "SHIP": return .teal
+                default: break
+                }
+            }
+        }
+        return .blue
+    }
+
     /// Converts a date to a time string for display (respects user's time format preference)
     private func timeString(from date: Date) -> String {
         let formatter = DateFormatter()
