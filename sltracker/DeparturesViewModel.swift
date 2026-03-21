@@ -100,14 +100,18 @@ final class DeparturesViewModel {
         departures = []
     }
     
+    /// Reusable date formatter for API date strings
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        formatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
+        return formatter
+    }()
+
     /// Converts a date string from the API to a Date object
     /// - Parameter dateString: The date string from the API (format: "2024-01-01T12:00:00")
     /// - Returns: A Date object, or current date if parsing fails
     private func parseDate(from dateString: String) -> Date {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        formatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
-        
-        return formatter.date(from: dateString) ?? Date()
+        Self.dateFormatter.date(from: dateString) ?? Date()
     }
 }

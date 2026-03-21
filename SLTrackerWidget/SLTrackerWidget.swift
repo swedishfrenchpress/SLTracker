@@ -67,10 +67,10 @@ struct SLTrackerWidgetEntryView: View {
             HStack {
                 Image(systemName: widgetIcon(for: departures))
                     .foregroundStyle(widgetIconColor(for: departures))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.footnote.weight(.medium))
                 
                 Text(stationName)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 
@@ -79,11 +79,11 @@ struct SLTrackerWidgetEntryView: View {
                 // Refresh icon and timestamp
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 8, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                     
                     Text(timeString(from: entry.lastUpdated))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -111,7 +111,7 @@ struct SLTrackerWidgetEntryView: View {
         HStack(spacing: 8) {
             // Line number
             Text(departure.line.designation)
-                .font(.system(size: 12, weight: .bold))
+                .font(.caption.bold())
                 .foregroundStyle(.white)
                 .frame(width: 24, height: 20)
                 .background(lineColor(for: departure))
@@ -119,7 +119,7 @@ struct SLTrackerWidgetEntryView: View {
             
             // Destination
             Text(departure.destination)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             
@@ -127,7 +127,7 @@ struct SLTrackerWidgetEntryView: View {
             
             // Time - show actual time instead of relative time
             Text(formatDepartureTime(departure.expected))
-                .font(.system(size: 12, weight: .bold))
+                .font(.caption.bold())
                 .foregroundStyle(.blue)
         }
         .padding(.horizontal, 12)
@@ -138,15 +138,15 @@ struct SLTrackerWidgetEntryView: View {
     private func noDeparturesView(stationName: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: "tram")
-                .font(.system(size: 24))
+                .font(.title2)
                 .foregroundStyle(.secondary)
             
             Text("No departures")
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
             
             Text(stationName)
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -157,15 +157,15 @@ struct SLTrackerWidgetEntryView: View {
     private var noPinnedStationsView: some View {
         VStack(spacing: 8) {
             Image(systemName: "pin")
-                .font(.system(size: 24))
+                .font(.title2)
                 .foregroundStyle(.secondary)
             
             Text("Pin a station")
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
             
             Text("Add a favorite station in the app")
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -178,11 +178,11 @@ struct SLTrackerWidgetEntryView: View {
     private func errorView(errorMessage: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 24))
+                .font(.title2)
                 .foregroundStyle(.red)
             
             Text("Error: \(errorMessage)")
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)

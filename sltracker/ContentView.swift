@@ -45,9 +45,6 @@ struct ContentView: View {
     /// The filtered list of station suggestions
     @State private var filteredStations: [Site] = []
 
-    /// The current site ID for the selected station
-    @State private var currentSiteID = ""
-    
     /// Whether the search field is focused
     @FocusState private var isSearchFocused: Bool
     
@@ -242,7 +239,7 @@ struct ContentView: View {
                     if #available(iOS 26, *) {
                         Button(action: refreshDepartures) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
@@ -251,7 +248,7 @@ struct ContentView: View {
                     } else {
                         Button(action: refreshDepartures) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
@@ -274,9 +271,9 @@ struct ContentView: View {
                     Button(action: resetSearch) {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                             Text("Back")
-                                .font(.system(size: 17, weight: .regular))
+                                .font(.body)
                         }
                     }
                     .buttonStyle(.glass)
@@ -284,9 +281,9 @@ struct ContentView: View {
                     Button(action: resetSearch) {
                         HStack(spacing: 4) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                             Text("Back")
-                                .font(.system(size: 17, weight: .regular))
+                                .font(.body)
                         }
                     }
                     .tint(.primary)
@@ -304,7 +301,7 @@ struct ContentView: View {
                             pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
                         }) {
                             Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .contentTransition(.symbolEffect(.replace))
                         }
                         .buttonStyle(.glass)
@@ -315,7 +312,7 @@ struct ContentView: View {
                             pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
                         }) {
                             Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .contentTransition(.symbolEffect(.replace))
                         }
                         .tint(.primary)
@@ -328,7 +325,7 @@ struct ContentView: View {
                     if #available(iOS 26, *) {
                         Button(action: refreshDepartures) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
@@ -337,7 +334,7 @@ struct ContentView: View {
                     } else {
                         Button(action: refreshDepartures) {
                             Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 16, weight: .medium))
+                                .font(.body.weight(.medium))
                                 .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
                                 .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
@@ -359,7 +356,7 @@ struct ContentView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                    .font(.system(size: 15))
+                    .font(.subheadline)
                 
                 TextField("Search for a station", text: $stationName)
                     .textFieldStyle(.plain)
@@ -384,7 +381,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
-                            .font(.system(size: 15))
+                            .font(.subheadline)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search")
@@ -445,7 +442,7 @@ struct ContentView: View {
     private func errorView(message: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 40))
+                .font(.largeTitle)
                 .foregroundStyle(.orange)
             
             Text("Error")
@@ -538,7 +535,7 @@ struct ContentView: View {
     private var noDeparturesView: some View {
         VStack(spacing: 16) {
             Image(systemName: "tram")
-                .font(.system(size: 40))
+                .font(.largeTitle)
                 .foregroundStyle(.secondary)
             
             Text("No departures found")
@@ -650,8 +647,7 @@ struct ContentView: View {
             
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(filteredStations.indices, id: \.self) { index in
-                        let site = filteredStations[index]
+                    ForEach(filteredStations) { site in
                         Button {
                             let impactFeedback = UIImpactFeedbackGenerator(style: .light)
                             impactFeedback.impactOccurred()
@@ -660,11 +656,11 @@ struct ContentView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "tram.fill")
                                     .foregroundStyle(.secondary)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(.subheadline.weight(.medium))
 
                                 Text(site.name)
                                     .foregroundStyle(.primary)
-                                    .font(.system(size: 16))
+                                    .font(.body)
                             }
                             .padding(.vertical, 12)
                             .padding(.horizontal, 12)
@@ -672,7 +668,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
 
-                        if index < filteredStations.count - 1 {
+                        if site.id != filteredStations.last?.id {
                             Divider()
                                 .background(Color(.separator))
                         }
@@ -757,7 +753,7 @@ struct ContentView: View {
         clearDropdownState()
         selectedTransportFilter = nil
         stationName = name
-        currentSiteID = siteID
+        viewModel.currentSiteID = siteID
 
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = true
@@ -796,16 +792,16 @@ struct ContentView: View {
     
     /// Gets the current site ID for the selected station
     private func getCurrentSiteID() -> String {
-        return currentSiteID
+        return viewModel.currentSiteID
     }
 
     /// Searches for departures using the current site ID
     private func searchDepartures() {
         let trimmedName = stationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty, !currentSiteID.isEmpty else { return }
+        guard !trimmedName.isEmpty, !viewModel.currentSiteID.isEmpty else { return }
 
         clearDropdownState()
-        viewModel.fetchDepartures(for: currentSiteID, stationName: trimmedName)
+        viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: trimmedName)
     }
     
     /// Resets the search and returns to initial state
@@ -818,7 +814,6 @@ struct ContentView: View {
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = false
             stationName = ""
-            currentSiteID = ""
             selectedTransportFilter = nil
             viewModel.clearDepartures()
         }
@@ -878,7 +873,7 @@ struct PinnedStationRow: View {
                 // Station icon based on transport modes
                 Image(systemName: stationIcon)
                     .foregroundStyle(stationIconColor)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.body.weight(.medium))
                     .frame(width: 28, height: 28)
                     .background(Color(.systemGray5))
                     .clipShape(.rect(cornerRadius: 6))
@@ -886,7 +881,7 @@ struct PinnedStationRow: View {
                 
                 // Station name
                 Text(station.name)
-                    .font(.system(size: 16))
+                    .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 
@@ -894,7 +889,7 @@ struct PinnedStationRow: View {
                 
                 // Chevron
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(isPressed ? 5 : 0))
             }
@@ -992,7 +987,7 @@ struct DepartureRowView: View {
             VStack(alignment: .leading, spacing: 6) {
                 // Colored line number box with subtle animation
                 Text(departure.line.designation)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.callout.bold())
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 28)
                     .background(lineColor(for: departure))
@@ -1002,7 +997,7 @@ struct DepartureRowView: View {
                     .opacity(isVisible ? 1.0 : 0.0)
                 
                 Text(departure.destination)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .opacity(isVisible ? 1.0 : 0.0)
@@ -1013,13 +1008,13 @@ struct DepartureRowView: View {
             // Departure time with pulse animation for urgent departures
             VStack(alignment: .trailing, spacing: 4) {
                 Text(departure.display)
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.headline)
                     .foregroundStyle(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
                     .scaleEffect(departure.display.contains("Nu") ? (isVisible ? 1.1 : 1.0) : 1.0)
                     .opacity(isVisible ? 1.0 : 0.0)
                 
                 Text("Platform \(departure.stopPoint.designation ?? "N/A")")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                     .opacity(isVisible ? 1.0 : 0.0)
             }
@@ -1057,19 +1052,6 @@ struct DepartureRowView: View {
         }
     }
     
-    private func formatTime(_ timeString: String) -> String {
-        // Convert ISO time string to readable format
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        
-        if let date = formatter.date(from: timeString) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "HH:mm"
-            return displayFormatter.string(from: date)
-        }
-        
-        return timeString
-    }
 }
 
 // MARK: - Filter Pill Button
@@ -1086,10 +1068,10 @@ struct FilterPillButton: View {
             HStack(spacing: 4) {
                 if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                 }
                 Text(label)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.caption.weight(.medium))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -1115,35 +1097,43 @@ struct FilterPillButton: View {
 
 /// Native confetti effect using Core Animation's particle emitter
 struct ConfettiView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        view.backgroundColor = .clear
-        view.isUserInteractionEnabled = false
-
-        let emitter = CAEmitterLayer()
-        emitter.emitterPosition = CGPoint(x: UIScreen.main.bounds.width / 2, y: -10)
-        emitter.emitterSize = CGSize(width: UIScreen.main.bounds.width, height: 1)
-        emitter.emitterShape = .line
-
-        let colors: [UIColor] = [.systemRed, .systemBlue, .systemGreen, .systemOrange, .systemPink, .systemYellow, .systemPurple]
-
-        emitter.emitterCells = colors.flatMap { color in
-            [makeCell(color: color, size: 8), makeCell(color: color, size: 5)]
-        }
-
-        view.layer.addSublayer(emitter)
-
-        // Stop emitting after 2 seconds — particles already in flight finish naturally
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            emitter.birthRate = 0
-        }
-
-        return view
+    func makeUIView(context: Context) -> ConfettiUIView {
+        ConfettiUIView()
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {}
+    func updateUIView(_ uiView: ConfettiUIView, context: Context) {}
 
-    private func makeCell(color: UIColor, size: CGFloat) -> CAEmitterCell {
+    class ConfettiUIView: UIView {
+        private let emitter = CAEmitterLayer()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            backgroundColor = .clear
+            isUserInteractionEnabled = false
+            emitter.emitterShape = .line
+
+            let colors: [UIColor] = [.systemRed, .systemBlue, .systemGreen, .systemOrange, .systemPink, .systemYellow, .systemPurple]
+            emitter.emitterCells = colors.flatMap { color in
+                [ConfettiView.makeCell(color: color, size: 8), ConfettiView.makeCell(color: color, size: 5)]
+            }
+
+            layer.addSublayer(emitter)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+                self?.emitter.birthRate = 0
+            }
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            emitter.emitterPosition = CGPoint(x: bounds.midX, y: -10)
+            emitter.emitterSize = CGSize(width: bounds.width, height: 1)
+        }
+    }
+
+    static func makeCell(color: UIColor, size: CGFloat) -> CAEmitterCell {
         let cell = CAEmitterCell()
         cell.birthRate = 12
         cell.lifetime = 5
@@ -1157,11 +1147,11 @@ struct ConfettiView: UIViewRepresentable {
         cell.scaleRange = 0.03
         cell.color = color.cgColor
         cell.alphaSpeed = -0.2
-        cell.contents = makeConfettiImage(size: size)
+        cell.contents = Self.makeConfettiImage(size: size)
         return cell
     }
 
-    private func makeConfettiImage(size: CGFloat) -> CGImage? {
+    static func makeConfettiImage(size: CGFloat) -> CGImage? {
         let rect = CGRect(origin: .zero, size: CGSize(width: size, height: size))
         UIGraphicsBeginImageContextWithOptions(rect.size, false, 0)
         UIColor.white.setFill()
