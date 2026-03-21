@@ -174,6 +174,7 @@ struct ContentView: View {
                             .frame(height: calculatedHeight)
                         
                         dropdownView
+                            .padding(.horizontal)
                             .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
                             .allowsHitTesting(true) // Ensure dropdown can receive taps
                         
@@ -1112,6 +1113,65 @@ struct FilterPillButton: View {
 
 // MARK: - Easter Egg Views
 
+/// Native confetti effect using Core Animation's particle emitter
+struct ConfettiView: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+
+        let emitter = CAEmitterLayer()
+        emitter.emitterPosition = CGPoint(x: UIScreen.main.bounds.width / 2, y: -10)
+        emitter.emitterSize = CGSize(width: UIScreen.main.bounds.width, height: 1)
+        emitter.emitterShape = .line
+
+        let colors: [UIColor] = [.systemRed, .systemBlue, .systemGreen, .systemOrange, .systemPink, .systemYellow, .systemPurple]
+
+        emitter.emitterCells = colors.flatMap { color in
+            [makeCell(color: color, size: 8), makeCell(color: color, size: 5)]
+        }
+
+        view.layer.addSublayer(emitter)
+
+        // Stop emitting after 2 seconds — particles already in flight finish naturally
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            emitter.birthRate = 0
+        }
+
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
+
+    private func makeCell(color: UIColor, size: CGFloat) -> CAEmitterCell {
+        let cell = CAEmitterCell()
+        cell.birthRate = 12
+        cell.lifetime = 5
+        cell.velocity = 180
+        cell.velocityRange = 80
+        cell.emissionLongitude = .pi
+        cell.emissionRange = .pi / 4
+        cell.spin = 4
+        cell.spinRange = 8
+        cell.scale = 0.06 * size / 8
+        cell.scaleRange = 0.03
+        cell.color = color.cgColor
+        cell.alphaSpeed = -0.2
+        cell.contents = makeConfettiImage(size: size)
+        return cell
+    }
+
+    private func makeConfettiImage(size: CGFloat) -> CGImage? {
+        let rect = CGRect(origin: .zero, size: CGSize(width: size, height: size))
+        UIGraphicsBeginImageContextWithOptions(rect.size, false, 0)
+        UIColor.white.setFill()
+        UIBezierPath(roundedRect: rect, cornerRadius: size > 6 ? 1 : size / 2).fill()
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return image?.cgImage
+    }
+}
+
 /// Thank you screen with dedication message
 struct ThankYouView: View {
     @Binding var isVisible: Bool
@@ -1152,6 +1212,7 @@ struct ThankYouView: View {
                 }
                 .padding(.vertical, 80)
             }
+            .overlay(ConfettiView().allowsHitTesting(false).ignoresSafeArea())
             .transition(.opacity)
         }
     }
