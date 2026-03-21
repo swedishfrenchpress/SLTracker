@@ -65,12 +65,12 @@ struct SLTrackerWidgetEntryView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Header with station name and refresh info
             HStack {
-                Image(systemName: "tram.fill")
-                    .foregroundStyle(.blue)
-                    .font(.system(size: 14, weight: .medium))
+                Image(systemName: widgetIcon(for: departures))
+                    .foregroundStyle(widgetIconColor(for: departures))
+                    .font(.footnote.weight(.medium))
                 
                 Text(stationName)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 
@@ -79,11 +79,11 @@ struct SLTrackerWidgetEntryView: View {
                 // Refresh icon and timestamp
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 8, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                     
                     Text(timeString(from: entry.lastUpdated))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -111,15 +111,15 @@ struct SLTrackerWidgetEntryView: View {
         HStack(spacing: 8) {
             // Line number
             Text(departure.line.designation)
-                .font(.system(size: 12, weight: .bold))
+                .font(.caption.bold())
                 .foregroundStyle(.white)
                 .frame(width: 24, height: 20)
-                .background(lineColor(for: departure.line.designation))
+                .background(lineColor(for: departure))
                 .clipShape(.rect(cornerRadius: 4))
             
             // Destination
             Text(departure.destination)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
             
@@ -127,7 +127,7 @@ struct SLTrackerWidgetEntryView: View {
             
             // Time - show actual time instead of relative time
             Text(formatDepartureTime(departure.expected))
-                .font(.system(size: 12, weight: .bold))
+                .font(.caption.bold())
                 .foregroundStyle(.blue)
         }
         .padding(.horizontal, 12)
@@ -138,15 +138,15 @@ struct SLTrackerWidgetEntryView: View {
     private func noDeparturesView(stationName: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: "tram")
-                .font(.system(size: 24))
+                .font(.title2)
                 .foregroundStyle(.secondary)
             
             Text("No departures")
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
             
             Text(stationName)
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
@@ -157,15 +157,15 @@ struct SLTrackerWidgetEntryView: View {
     private var noPinnedStationsView: some View {
         VStack(spacing: 8) {
             Image(systemName: "pin")
-                .font(.system(size: 24))
+                .font(.title2)
                 .foregroundStyle(.secondary)
             
             Text("Pin a station")
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
             
             Text("Add a favorite station in the app")
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -178,11 +178,11 @@ struct SLTrackerWidgetEntryView: View {
     private func errorView(errorMessage: String) -> some View {
         VStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 24))
+                .font(.title2)
                 .foregroundStyle(.red)
             
             Text("Error: \(errorMessage)")
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -191,20 +191,80 @@ struct SLTrackerWidgetEntryView: View {
         .padding(.horizontal, 12)
     }
     
-    /// Returns the appropriate color for each metro line
-    private func lineColor(for lineNumber: String) -> Color {
-        switch lineNumber {
-        case "13", "14":
-            return Color.red // Red line
-        case "17", "18", "19":
-            return Color.green // Green line
-        case "10", "11":
-            return Color.blue // Blue line
-        default:
-            return Color.gray // Default for unknown lines
+    /// Returns the appropriate color based on transport mode and line
+    private func lineColor(for departure: Departure) -> Color {
+        switch departure.line.transportMode {
+        case "METRO":
+            switch departure.line.designation {
+            case "13", "14": return .red
+            case "17", "18", "19": return .green
+            case "10", "11": return .blue
+            default: return .gray
+            }
+        case "TRAM": return .orange
+        case "BUS": return .indigo
+        case "TRAIN": return .purple
+        case "SHIP": return .teal
+        default: return .gray
         }
     }
     
+    /// Returns the appropriate icon based on the departures' transport modes
+    private func widgetIcon(for departures: [Departure]) -> String {
+        let modes = Set(departures.map { $0.line.transportMode })
+        if modes.contains("METRO") || modes.isEmpty { return "tram.fill" }
+        if modes.count == 1, let mode = modes.first {
+            switch mode {
+            case "TRAM": return "cablecar"
+            case "BUS": return "bus.fill"
+            case "TRAIN": return "train.side.front.car"
+            case "SHIP": return "ferry.fill"
+            default: return "tram.fill"
+            }
+        }
+        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
+        for mode in priority {
+            if modes.contains(mode) {
+                switch mode {
+                case "TRAM": return "cablecar"
+                case "BUS": return "bus.fill"
+                case "TRAIN": return "train.side.front.car"
+                case "SHIP": return "ferry.fill"
+                default: break
+                }
+            }
+        }
+        return "tram.fill"
+    }
+
+    /// Returns the appropriate icon color based on the departures' transport modes
+    private func widgetIconColor(for departures: [Departure]) -> Color {
+        let modes = Set(departures.map { $0.line.transportMode })
+        if modes.contains("METRO") || modes.isEmpty { return .blue }
+        if modes.count == 1, let mode = modes.first {
+            switch mode {
+            case "TRAM": return .orange
+            case "BUS": return .indigo
+            case "TRAIN": return .purple
+            case "SHIP": return .teal
+            default: return .blue
+            }
+        }
+        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
+        for mode in priority {
+            if modes.contains(mode) {
+                switch mode {
+                case "TRAM": return .orange
+                case "BUS": return .indigo
+                case "TRAIN": return .purple
+                case "SHIP": return .teal
+                default: break
+                }
+            }
+        }
+        return .blue
+    }
+
     /// Converts a date to a time string for display (respects user's time format preference)
     private func timeString(from date: Date) -> String {
         let formatter = DateFormatter()
@@ -332,8 +392,10 @@ struct SLTrackerWidgetProvider: TimelineProvider {
         // Fetch departures for the first station
         do {
             let apiManager = APIManager.shared
-            let departures = try await apiManager.fetchMetroDepartures(for: firstStation.name)
-            
+            let allDepartures = try await apiManager.fetchDepartures(for: firstStation.id)
+            // Sort by expected time (ISO 8601 strings sort chronologically)
+            let departures = allDepartures.sorted { $0.expected < $1.expected }
+
             let entry = SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: firstStation.name,
