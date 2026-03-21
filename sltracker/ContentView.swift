@@ -42,19 +42,20 @@ struct ContentView: View {
     /// Selected transport mode filter (nil = show all)
     @State private var selectedTransportFilter: String? = nil
 
+    /// Controls nav bar display mode independently from isSearchMode for smooth back-navigation
+    @State private var useInlineTitle = false
+
     // Station data is now loaded from all_sites.json via SiteStore
 
     // MARK: - Body
 
     var body: some View {
+        ZStack {
         NavigationStack {
             ZStack {
                 // Background - consistent throughout app
                 Color(.systemBackground)
                     .ignoresSafeArea()
-                    .onTapGesture {
-                        isSearchFieldFocused = false
-                    }
 
                 // Main content layers with iOS-standard navigation animations
                 switch isSearchMode {
@@ -74,13 +75,8 @@ struct ContentView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.35), value: isSearchMode)
-
-            // Easter egg overlay
-            .overlay(
-                ThankYouView(isVisible: $showingThankYou)
-            )
             .navigationTitle(isSearchMode ? stationName : "SL Tracker")
-            .navigationBarTitleDisplayMode(isSearchMode ? .inline : .large)
+            .navigationBarTitleDisplayMode(useInlineTitle ? .inline : .large)
             .toolbar {
                 if isSearchMode {
                     ToolbarItem(placement: .topBarLeading) {
@@ -195,6 +191,13 @@ struct ContentView: View {
                 navigationState.clearNavigationTarget()
             }
         }
+        .blur(radius: showingThankYou ? 8 : 0)
+        .opacity(showingThankYou ? 0.3 : 1)
+
+        // Easter egg overlay — above NavigationStack, covers nav bar
+        ThankYouView(isVisible: $showingThankYou)
+        }
+        .animation(.easeInOut(duration: 0.3), value: showingThankYou)
     }
 
     // MARK: - View Components
@@ -266,6 +269,7 @@ struct ContentView: View {
             )
             .padding(.horizontal)
         }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     /// Home screen view
@@ -282,17 +286,21 @@ struct ContentView: View {
             } else if !isSearchFieldFocused {
                 initialView
                     .padding(.top, 32)
+                    .onTapGesture { isSearchFieldFocused = false }
 
                 Spacer()
+                    .contentShape(Rectangle())
+                    .onTapGesture { isSearchFieldFocused = false }
 
                 footerSection
             } else {
                 Spacer()
+                    .contentShape(Rectangle())
+                    .onTapGesture { isSearchFieldFocused = false }
             }
         }
         .padding(.horizontal, 0)
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .animation(.easeInOut(duration: 0.25), value: isSearchFieldFocused)
         .onChange(of: stationName) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty {
@@ -620,6 +628,7 @@ struct ContentView: View {
 
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = true
+            useInlineTitle = true
         }
 
         Task {
@@ -651,10 +660,11 @@ struct ContentView: View {
     private func resetSearch() {
         isSearchFieldFocused = false
         filteredStations = []
+        stationName = ""
+        useInlineTitle = false
 
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = false
-            stationName = ""
             selectedTransportFilter = nil
             viewModel.clearDepartures()
         }
@@ -1019,18 +1029,13 @@ struct ThankYouView: View {
                 VStack(spacing: 40) {
                     Spacer()
 
-                    VStack(spacing: 16) {
-                        // Simple title
-                        Text("Dedication")
-                            .font(.title)
-                            .foregroundStyle(.primary)
-
-                        // Simple subtitle
-                        Text("This app is dedicated to my friends Alex, Nick, and Elin from Katerina Ol Cafe. The best bar in Stockholm.")
+                    VStack(spacing: 8) {
+                        Text("Dedicated to all my friends in Berlin.")
                             .font(.body)
                             .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 40)
+                        Text("I miss you.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer()
