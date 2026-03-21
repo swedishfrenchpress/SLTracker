@@ -70,7 +70,10 @@ struct ContentView: View {
 
     /// Empty state animation flag
     @State private var isEmptyStatePulsing = false
-    
+
+    /// Selected transport mode filter (nil = show all)
+    @State private var selectedTransportFilter: String? = nil
+
     // Station data is now loaded from all_sites.json via SiteStore
     
     // MARK: - Body
@@ -475,49 +478,66 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    /// List of departures grouped by transport mode
-    private var departuresList: some View {
-        let grouped = Dictionary(grouping: viewModel.departures) { $0.line.transportMode }
-        let modeOrder = ["METRO", "TRAM", "BUS", "TRAIN", "SHIP"]
-        let sortedModes = modeOrder.filter { grouped[$0] != nil }
+    /// Filter pills for transport modes (only shown when 2+ modes available)
+    @ViewBuilder
+    private var transportFilterPills: some View {
+        let modes = availableTransportModes
+        if modes.count >= 2 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    FilterPillButton(
+                        label: "All",
+                        icon: nil,
+                        color: .primary,
+                        isSelected: selectedTransportFilter == nil
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedTransportFilter = nil
+                        }
+                    }
 
-        return VStack(spacing: 0) {
+                    ForEach(modes, id: \.self) { mode in
+                        FilterPillButton(
+                            label: transportModeName(for: mode),
+                            icon: transportModeIcon(for: mode),
+                            color: transportModeColor(for: mode),
+                            isSelected: selectedTransportFilter == mode
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedTransportFilter = mode
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    /// Flat chronological list of departures with optional filter pills
+    private var departuresList: some View {
+        VStack(spacing: 0) {
+            transportFilterPills
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(sortedModes, id: \.self) { mode in
-                            if let departures = grouped[mode] {
-                                // Section header
-                                HStack(spacing: 8) {
-                                    Image(systemName: transportModeIcon(for: mode))
-                                        .foregroundStyle(transportModeColor(for: mode))
-                                        .font(.system(size: 14, weight: .medium))
-                                    Text(transportModeName(for: mode))
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                }
+                        ForEach(Array(filteredDepartures.enumerated()), id: \.element.id) { index, departure in
+                            DepartureRowView(departure: departure)
                                 .padding(.horizontal)
-                                .padding(.top, mode == sortedModes.first ? 0 : 16)
-                                .padding(.bottom, 8)
+                                .padding(.vertical, 8)
+                                .id(departure.id)
+                                .transition(.asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .trailing))
+                                        .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
+                                    removal: .opacity.animation(.easeInOut(duration: 0.2))
+                                ))
+                                .modifier(ScrollFadeModifier(index: index))
 
-                                ForEach(Array(departures.enumerated()), id: \.element.id) { index, departure in
-                                    DepartureRowView(departure: departure)
-                                        .padding(.horizontal)
-                                        .padding(.vertical, 8)
-                                        .id(departure.id)
-                                        .transition(.asymmetric(
-                                            insertion: .opacity.combined(with: .move(edge: .trailing))
-                                                .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
-                                            removal: .opacity.animation(.easeInOut(duration: 0.2))
-                                        ))
-                                        .modifier(ScrollFadeModifier(index: index))
-
-                                    if departure.id != departures.last?.id {
-                                        Divider()
-                                            .padding(.leading)
-                                    }
-                                }
+                            if index < filteredDepartures.count - 1 {
+                                Divider()
+                                    .padding(.leading)
                             }
                         }
                     }
@@ -715,6 +735,21 @@ struct ContentView: View {
         }
     }
 
+    /// Ordered list of transport modes present in current departures
+    private var availableTransportModes: [String] {
+        let modeOrder = ["METRO", "TRAM", "BUS", "TRAIN", "SHIP"]
+        let presentModes = Set(viewModel.departures.map { $0.line.transportMode })
+        return modeOrder.filter { presentModes.contains($0) }
+    }
+
+    /// Departures filtered by the selected transport mode
+    private var filteredDepartures: [Departure] {
+        guard let filter = selectedTransportFilter else {
+            return viewModel.departures
+        }
+        return viewModel.departures.filter { $0.line.transportMode == filter }
+    }
+
     // MARK: - Actions
 
     /// Updates the station suggestions based on user input
@@ -734,6 +769,7 @@ struct ContentView: View {
     private func selectStation(name: String, siteID: String) {
         isSearchFocused = false
         clearDropdownState()
+        selectedTransportFilter = nil
         stationName = name
         currentSiteID = siteID
 
@@ -797,12 +833,14 @@ struct ContentView: View {
             isSearchMode = false
             stationName = ""
             currentSiteID = ""
+            selectedTransportFilter = nil
             viewModel.clearDepartures()
         }
     }
-    
+
     /// Refreshes the current departures by calling the API again
     private func refreshDepartures() {
+        selectedTransportFilter = nil
         guard !viewModel.currentSiteID.isEmpty else { return }
         viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: viewModel.currentStation)
     }
@@ -991,6 +1029,39 @@ struct DepartureRowView: View {
         }
         
         return timeString
+    }
+}
+
+// MARK: - Filter Pill Button
+
+struct FilterPillButton: View {
+    let label: String
+    let icon: String?
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                Text(label)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? color.opacity(0.15) : Color(.systemGray6))
+            .foregroundStyle(isSelected ? color : .secondary)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(isSelected ? color.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
