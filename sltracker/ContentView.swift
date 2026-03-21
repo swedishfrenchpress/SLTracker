@@ -1013,10 +1013,12 @@ struct DepartureRowView: View {
                     .scaleEffect(departure.display.contains("Nu") ? (isVisible ? 1.1 : 1.0) : 1.0)
                     .opacity(isVisible ? 1.0 : 0.0)
                 
-                Text("Platform \(departure.stopPoint.designation ?? "N/A")")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .opacity(isVisible ? 1.0 : 0.0)
+                if let platform = departure.stopPoint.designation {
+                    Text("Platform \(platform)")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .opacity(isVisible ? 1.0 : 0.0)
+                }
             }
         }
         .onAppear {
