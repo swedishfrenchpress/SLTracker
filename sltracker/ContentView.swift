@@ -7,22 +7,6 @@
 
 import SwiftUI
 
-// MARK: - Preference Keys for Dynamic Layout
-
-struct HeaderHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-struct SearchBarHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 struct ContentView: View {
     
     // MARK: - Properties
@@ -54,9 +38,6 @@ struct ContentView: View {
     /// Animation state for smooth transitions
     @State private var searchBarOffset: CGFloat = 0
     
-    /// Dynamic layout measurements for responsive positioning
-    @State private var headerHeight: CGFloat = 0
-    @State private var searchBarHeight: CGFloat = 0
     
     /// Easter egg state variables
     @State private var showingThankYou = false
@@ -118,74 +99,41 @@ struct ContentView: View {
     
     /// Home screen view with tap-to-dismiss functionality
     private var homeScreenView: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                // Main content
-                VStack(spacing: 0) {
-                    // Custom header (instead of NavigationView)
-                    homeScreenHeader
-                        .background(
-                            GeometryReader { headerGeometry in
-                                Color.clear.preference(key: HeaderHeightPreferenceKey.self, value: headerGeometry.size.height)
-                            }
-                        )
-                    
-                    // Search Section
-                    searchBarSection
-                        .background(
-                            GeometryReader { searchGeometry in
-                                Color.clear.preference(key: SearchBarHeightPreferenceKey.self, value: searchGeometry.size.height)
-                            }
-                        )
-                    
-                    // Content Section
-                    VStack {
-                        if !viewModel.departures.isEmpty {
-                            departuresList
-                        } else {
-                            initialView
-                        }
-                    }
+        VStack(spacing: 0) {
+            // Custom header (instead of NavigationView)
+            homeScreenHeader
+
+            // Search Section
+            searchBarSection
+
+            // Content: search results take over when typing, otherwise show pinned/departures
+            if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
+                dropdownView
+                    .padding(.top, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)).animation(.easeInOut(duration: 0.25)))
+
+                Spacer()
+            } else if !viewModel.departures.isEmpty {
+                departuresList
                     .padding(.top, 32)
-                    
-                    Spacer()
-                    
-                    // Footer
-                    footerSection
-                }
-                .padding(.horizontal)
-                .contentShape(Rectangle()) // Make entire area tappable
-                .onTapGesture {
-                    // Dismiss dropdown and keyboard when tapping outside
-                    if showingSuggestions {
-                        dismissDropdownAndKeyboard()
-                    }
-                }
-                
-                // Dynamic dropdown overlay
-                if showingSuggestions && !filteredStations.isEmpty && !viewModel.isLoading {
-                    VStack(spacing: 0) {
-                        // Dynamic positioning with fallback values for initial state
-                        let calculatedHeight = max(headerHeight + searchBarHeight + 16, 140) // Increased spacing after moving search bar
-                        Spacer()
-                            .frame(height: calculatedHeight)
-                        
-                        dropdownView
-                            .padding(.horizontal)
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.25)))
-                            .allowsHitTesting(true) // Ensure dropdown can receive taps
-                        
-                        Spacer()
-                    }
-                    .zIndex(1)
-                }
+
+                Spacer()
+            } else {
+                initialView
+                    .padding(.top, 32)
+
+                Spacer()
+
+                // Footer
+                footerSection
             }
         }
-        .onPreferenceChange(HeaderHeightPreferenceKey.self) { height in
-            headerHeight = height
-        }
-        .onPreferenceChange(SearchBarHeightPreferenceKey.self) { height in
-            searchBarHeight = height
+        .padding(.horizontal)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if showingSuggestions {
+                dismissDropdownAndKeyboard()
+            }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
     }
