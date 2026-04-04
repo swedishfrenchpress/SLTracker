@@ -36,8 +36,6 @@ struct ContentView: View {
     /// Focus state for custom search bar
     @FocusState private var isSearchFieldFocused: Bool
 
-    /// Empty state animation flag
-    @State private var isEmptyStatePulsing = false
 
     /// Selected transport mode filter (nil = show all)
     @State private var selectedTransportFilter: String? = nil
@@ -77,24 +75,24 @@ struct ContentView: View {
                     .transition(.opacity)
                 }
 
-                // Main content layers with iOS-standard navigation animations
-                switch isSearchMode {
-                case false:
-                    // Home screen - always present, no insertion animation
-                    homeScreenView
-                        .zIndex(0)
+                // Main content layers
+                Group {
+                    switch isSearchMode {
+                    case false:
+                        homeScreenView
+                            .zIndex(0)
 
-                case true:
-                    // Search results screen - slides in from right, out to right
-                    searchResultsView
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity)
-                        ))
-                        .zIndex(1)
+                    case true:
+                        searchResultsView
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
+                            .zIndex(1)
+                    }
                 }
+                .animation(reduceMotion ? .none : .default, value: isSearchMode)
             }
-            .animation(reduceMotion ? .none : .default, value: isSearchMode)
             .navigationTitle(isSearchMode ? stationName : "SL Tracker")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -252,20 +250,20 @@ struct ContentView: View {
             } else if !isSearchFieldFocused {
                 initialView
                     .padding(.top, 32)
-                    .onTapGesture { isSearchFieldFocused = false }
 
                 Spacer()
-                    .contentShape(Rectangle())
-                    .onTapGesture { isSearchFieldFocused = false }
 
                 footerSection
             } else {
                 Spacer()
-                    .contentShape(Rectangle())
-                    .onTapGesture { isSearchFieldFocused = false }
             }
         }
-        .padding(.horizontal, 0)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation {
+                isSearchFieldFocused = false
+            }
+        }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onChange(of: stationName) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -429,34 +427,22 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Initial state when app first loads with smooth transitions
+    /// Initial state when app first loads
     private var initialView: some View {
         Group {
             if pinnedManager.pinnedStations.isEmpty {
-                // Empty state with subtle animation
-                VStack(spacing: 24) {
-                    Image(systemName: "tram.fill")
-                        .font(.largeTitle)
-                        .imageScale(.large)
-                        .foregroundStyle(.blue)
-                        .accessibilityHidden(true)
-                        .scaleEffect(isEmptyStatePulsing && !reduceMotion ? 1.05 : 1.0)
-                        .animation(reduceMotion ? .none : .easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isEmptyStatePulsing)
-                        .onAppear {
-                            isEmptyStatePulsing = true
-                        }
-                        .onDisappear {
-                            isEmptyStatePulsing = false
-                        }
-
+                VStack(spacing: 12) {
                     Text("Ready to roll?")
                         .font(.title2)
                         .fontWeight(.semibold)
-                        .opacity(0.8)
+                        .foregroundStyle(.primary.opacity(0.8))
+
+                    Text("Search for a station to get started")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                // Pinned stations
                 pinnedStationsView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -568,10 +554,10 @@ struct ContentView: View {
         isSearchFieldFocused = false
         filteredStations = []
         selectedTransportFilter = nil
-        stationName = name
         viewModel.currentSiteID = siteID
 
         withAnimation(reduceMotion ? .none : .default) {
+            stationName = name
             isSearchMode = true
         }
 
@@ -606,9 +592,9 @@ struct ContentView: View {
     private func resetSearch() {
         isSearchFieldFocused = false
         filteredStations = []
-        stationName = ""
 
         withAnimation(reduceMotion ? .none : .default) {
+            stationName = ""
             isSearchMode = false
             selectedTransportFilter = nil
             viewModel.clearDepartures()
