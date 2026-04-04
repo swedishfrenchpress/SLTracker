@@ -42,8 +42,6 @@ struct ContentView: View {
     /// Selected transport mode filter (nil = show all)
     @State private var selectedTransportFilter: String? = nil
 
-    /// Controls nav bar display mode independently from isSearchMode for smooth back-navigation
-    @State private var useInlineTitle = false
 
     /// Tracked tasks for proper cancellation
     @State private var selectStationTask: Task<Void, Never>?
@@ -94,7 +92,7 @@ struct ContentView: View {
             }
             .animation(.easeInOut(duration: 0.35), value: isSearchMode)
             .navigationTitle(isSearchMode ? stationName : "SL Tracker")
-            .navigationBarTitleDisplayMode(useInlineTitle ? .inline : .large)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 if isSearchMode {
                     ToolbarItem(placement: .topBarLeading) {
@@ -587,7 +585,6 @@ struct ContentView: View {
 
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = true
-            useInlineTitle = true
         }
 
         selectStationTask?.cancel()
@@ -622,7 +619,6 @@ struct ContentView: View {
         isSearchFieldFocused = false
         filteredStations = []
         stationName = ""
-        useInlineTitle = false
 
         withAnimation(.easeInOut(duration: 0.35)) {
             isSearchMode = false
