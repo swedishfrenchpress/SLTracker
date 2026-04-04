@@ -387,7 +387,8 @@ struct ContentView: View {
                 label: "All",
                 icon: nil,
                 color: .primary,
-                isSelected: selectedTransportFilter == nil
+                isSelected: selectedTransportFilter == nil,
+                invertSelection: true
             ) {
                 withAnimation {
                     selectedTransportFilter = nil
@@ -869,6 +870,7 @@ struct FilterPillButton: View {
     let icon: String?
     let color: Color
     let isSelected: Bool
+    var invertSelection: Bool = false
     let action: () -> Void
 
     private var pillContent: some View {
@@ -882,7 +884,8 @@ struct FilterPillButton: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .foregroundStyle(isSelected ? color : .secondary)
+        .fixedSize()
+        .foregroundStyle(isSelected ? (invertSelection ? Color(.systemBackground) : color) : .primary)
     }
 
     var body: some View {
@@ -890,16 +893,16 @@ struct FilterPillButton: View {
             if #available(iOS 26, *) {
                 pillContent
                     .glassEffect(
-                        isSelected ? .regular.interactive().tint(color) : .regular.interactive(),
+                        isSelected ? .regular.interactive().tint(invertSelection ? Color(.label) : color) : .regular.interactive(),
                         in: .capsule
                     )
             } else {
                 pillContent
-                    .background(isSelected ? color.opacity(0.15) : Color(.systemGray6))
+                    .background(isSelected ? (invertSelection ? Color(.label) : color.opacity(0.15)) : Color(.systemGray6))
                     .clipShape(Capsule())
                     .overlay(
                         Capsule()
-                            .strokeBorder(isSelected ? color.opacity(0.3) : Color.clear, lineWidth: 1)
+                            .strokeBorder(isSelected ? (invertSelection ? Color.clear : color.opacity(0.3)) : Color.clear, lineWidth: 1)
                     )
             }
         }
