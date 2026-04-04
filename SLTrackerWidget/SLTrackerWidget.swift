@@ -319,35 +319,12 @@ struct SLTrackerWidgetProvider: TimelineProvider {
     /// Provides timeline entries for the widget
     func getTimeline(in context: Context, completion: @escaping (Timeline<SLTrackerWidgetEntry>) -> Void) {
         Task {
-            // Fetch current data
             let entry = await fetchWidgetData()
-            
-            // Create a more aggressive update strategy
-            var entries: [SLTrackerWidgetEntry] = [entry]
-            
-            // Create multiple future entries with shorter intervals
-            // This helps iOS understand we want frequent updates
-            let currentDate = Date()
-            
-            // Add entries for the next 5 minutes with 30-second intervals
-            for i in 1...10 {
-                if let futureDate = Calendar.current.date(byAdding: .second, value: i * 30, to: currentDate) {
-                    // Create a placeholder entry that will be refreshed
-                    let futureEntry = SLTrackerWidgetEntry(
-                        date: futureDate,
-                        stationName: entry.stationName,
-                        departures: entry.departures,
-                        errorMessage: entry.errorMessage
-                    )
-                    entries.append(futureEntry)
-                }
-            }
-            
-            // Use a very aggressive update policy for real-time feel
-            // Request updates every 30 seconds, but iOS may not honor this
-            let nextUpdate = Calendar.current.date(byAdding: .second, value: 30, to: currentDate) ?? currentDate
-            
-            let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
+
+            // Request next update in 5 minutes — iOS controls actual frequency.
+            // The app also calls WidgetCenter.shared.reloadAllTimelines() on data changes.
+            let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date()) ?? Date()
+            let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
             completion(timeline)
         }
     }

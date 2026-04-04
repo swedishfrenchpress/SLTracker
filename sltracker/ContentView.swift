@@ -45,6 +45,10 @@ struct ContentView: View {
     /// Controls nav bar display mode independently from isSearchMode for smooth back-navigation
     @State private var useInlineTitle = false
 
+    /// Tracked tasks for proper cancellation
+    @State private var selectStationTask: Task<Void, Never>?
+    @State private var easterEggResetTask: Task<Void, Never>?
+
     // Station data is now loaded from all_sites.json via SiteStore
 
     // MARK: - Body
@@ -586,8 +590,10 @@ struct ContentView: View {
             useInlineTitle = true
         }
 
-        Task {
+        selectStationTask?.cancel()
+        selectStationTask = Task {
             try? await Task.sleep(nanoseconds: 100_000_000)
+            guard !Task.isCancelled else { return }
             searchDepartures()
         }
     }
@@ -637,8 +643,10 @@ struct ContentView: View {
         easterEggTapCount += 1
 
         // Reset tap count after 3 seconds if not completed
-        Task {
+        easterEggResetTask?.cancel()
+        easterEggResetTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+            guard !Task.isCancelled else { return }
             if easterEggTapCount < 3 {
                 easterEggTapCount = 0
             }
@@ -1013,95 +1021,32 @@ struct ThankYouView: View {
 
 // MARK: - Scroll Fade Modifier
 
-/// A custom modifier that applies beautiful fade animations based on scroll position
-/// This creates the same fade effect when scrolling up as when scrolling down
-///
-/// How it works:
-/// 1. Tracks scroll position using GeometryReader and preference keys
-/// 2. Determines scroll direction by comparing current vs previous scroll offset
-/// 3. Applies fade-in animations when items come into view (both up and down scrolling)
-/// 4. Uses staggered delays for a beautiful cascading effect
+/// A custom modifier that applies staggered fade-in/out animations as items appear and disappear
 struct ScrollFadeModifier: ViewModifier {
     let index: Int
 
     @State private var isVisible = false
-    @State private var scrollOffset: CGFloat = 0
-    @State private var lastScrollOffset: CGFloat = 0
-    @State private var scrollDirection: ScrollDirection = .none
 
-    // Animation timing for smooth fade effects - optimized for snappier response
     private let fadeInDuration: Double = 0.2
     private let fadeOutDuration: Double = 0.15
     private let staggerDelay: Double = 0.01
-
-    enum ScrollDirection {
-        case up, down, none
-    }
 
     func body(content: Content) -> some View {
         content
             .opacity(isVisible ? 1.0 : 0.0)
             .scaleEffect(isVisible ? 1.0 : 0.98)
-            .offset(y: isVisible ? 0 : (scrollDirection == .up ? 5 : -5))
             .animation(
                 .easeOut(duration: isVisible ? fadeInDuration : fadeOutDuration)
                 .delay(Double(index) * staggerDelay),
                 value: isVisible
             )
             .onAppear {
-                // Initial fade in with minimal delay for snappier response
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(Double(index) * staggerDelay * 1_000_000_000))
-                    withAnimation(.easeOut(duration: fadeInDuration)) {
-                        isVisible = true
-                    }
+                withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
+                    isVisible = true
                 }
             }
             .onDisappear {
-                // Fade out when disappearing
-                withAnimation(.easeOut(duration: fadeOutDuration)) {
-                    isVisible = false
-                }
+                isVisible = false
             }
-            // Add scroll detection using GeometryReader
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
-                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-                            scrollOffset = value
-
-                            // Determine scroll direction with much lower threshold for snappier response
-                            if abs(scrollOffset - lastScrollOffset) > 2 { // Reduced threshold for immediate response
-                                scrollDirection = scrollOffset > lastScrollOffset ? .up : .down
-
-                                // Apply fade animation based on scroll direction - immediate response
-                                if scrollDirection == .up {
-                                    // Fade in when scrolling up (items coming into view from bottom)
-                                    withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
-                                        isVisible = true
-                                    }
-                                } else if scrollDirection == .down {
-                                    // Fade in when scrolling down (items coming into view from top)
-                                    withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
-                                        isVisible = true
-                                    }
-                                }
-                            }
-
-                            lastScrollOffset = scrollOffset
-                        }
-                }
-            )
-    }
-}
-
-// MARK: - Scroll Offset Preference Key
-
-/// Preference key for tracking scroll offset
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }

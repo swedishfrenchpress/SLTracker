@@ -96,8 +96,7 @@ final class DeparturesViewModel {
             errorMessage = "An unexpected error occurred: \(error.localizedDescription)"
         }
         
-        // Clear departures when there's an error
-        departures = []
+        // Keep existing departures so user still sees previous data with error banner
     }
     
     /// Reusable date formatter for API date strings
