@@ -68,7 +68,7 @@ struct ContentView: View {
                             .aspectRatio(contentMode: .fill)
                             .frame(width: geo.size.width, height: geo.size.height)
                             .clipped()
-                            .opacity(0.15)
+                            .opacity(0.3)
                     }
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
