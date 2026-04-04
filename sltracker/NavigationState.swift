@@ -14,15 +14,18 @@ import SwiftUI
 final class NavigationState {
     var targetStation: String?
     var shouldNavigateToStation = false
-    
+    private var resetTask: Task<Void, Never>?
+
     /// Navigate to a specific station (called from widget tap)
     func navigateToStation(stationName: String) {
         targetStation = stationName
         shouldNavigateToStation = true
-        
+
         // Reset after a short delay to allow navigation to complete
-        Task {
+        resetTask?.cancel()
+        resetTask = Task {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            guard !Task.isCancelled else { return }
             self.shouldNavigateToStation = false
         }
     }

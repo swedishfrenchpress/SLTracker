@@ -258,7 +258,7 @@ final class PinnedStationsManager {
 // MARK: - API Manager (Shared between app and widget)
 
 /// Manages all API calls to the Stockholm Transport API
-class APIManager {
+final class APIManager {
     
     /// Shared singleton instance
     static let shared = APIManager()
