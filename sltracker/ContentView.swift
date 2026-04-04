@@ -164,7 +164,7 @@ struct ContentView: View {
         .padding(10)
         .contentShape(Rectangle())
         .onTapGesture { isSearchFieldFocused = true }
-        .modifier(GlassOrFillModifier(cornerRadius: 10))
+        .modifier(GlassOrFillModifier(cornerRadius: .infinity))
         .padding(.horizontal)
         .padding(.top, 8)
     }
@@ -199,7 +199,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .modifier(GlassOrFillModifier(cornerRadius: 10))
+            .modifier(GlassOrFillModifier(cornerRadius: 16))
             .padding(.horizontal)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -473,7 +473,7 @@ struct ContentView: View {
                 }
             }
         }
-        .modifier(GlassOrFillModifier(cornerRadius: 12))
+        .modifier(GlassOrFillModifier(cornerRadius: 16))
     }
 
     /// Footer section
@@ -802,16 +802,28 @@ struct DepartureRowView: View {
 
 // MARK: - Glass or Fill Modifier
 
-/// Applies liquid glass on iOS 26+, falls back to systemGray6 fill
+/// Applies liquid glass on iOS 26+, falls back to systemGray6 fill.
+/// Pass `.infinity` for cornerRadius to get a capsule shape.
 struct GlassOrFillModifier: ViewModifier {
     let cornerRadius: CGFloat
 
+    private var isCapsule: Bool { cornerRadius == .infinity }
+
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
-            content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            if isCapsule {
+                content.glassEffect(.regular, in: .capsule)
+            } else {
+                content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            }
         } else {
-            content
-                .background(RoundedRectangle(cornerRadius: cornerRadius).fill(Color(.systemGray6)))
+            if isCapsule {
+                content
+                    .background(Capsule().fill(Color(.systemGray6)))
+            } else {
+                content
+                    .background(RoundedRectangle(cornerRadius: cornerRadius).fill(Color(.systemGray6)))
+            }
         }
     }
 }
