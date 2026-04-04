@@ -94,7 +94,7 @@ struct ContentView: View {
                         .zIndex(1)
                 }
             }
-            .animation(reduceMotion ? .none : .easeInOut(duration: 0.35), value: isSearchMode)
+            .animation(reduceMotion ? .none : .default, value: isSearchMode)
             .navigationTitle(isSearchMode ? stationName : "SL Tracker")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -161,7 +161,7 @@ struct ContentView: View {
         // Easter egg overlay — above NavigationStack, covers nav bar
         ThankYouView(isVisible: $showingThankYou)
         }
-        .animation(reduceMotion ? .none : .easeInOut(duration: 0.3), value: showingThankYou)
+        .animation(reduceMotion ? .none : .default, value: showingThankYou)
     }
 
     // MARK: - View Components
@@ -571,7 +571,7 @@ struct ContentView: View {
         stationName = name
         viewModel.currentSiteID = siteID
 
-        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.35)) {
+        withAnimation(reduceMotion ? .none : .default) {
             isSearchMode = true
         }
 
@@ -608,7 +608,7 @@ struct ContentView: View {
         filteredStations = []
         stationName = ""
 
-        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.35)) {
+        withAnimation(reduceMotion ? .none : .default) {
             isSearchMode = false
             selectedTransportFilter = nil
             viewModel.clearDepartures()
@@ -641,7 +641,7 @@ struct ContentView: View {
             easterEggTapCount = 0 // Reset for next time
 
             // Show thank you screen
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation {
                 showingThankYou = true
             }
         }
@@ -699,7 +699,7 @@ struct PinnedStationRow: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onLongPressGesture(minimumDuration: 0.01, maximumDistance: .infinity, pressing: { isPressing in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation {
                 isPressed = isPressing
             }
         }, perform: {})
