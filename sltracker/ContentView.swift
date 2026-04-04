@@ -33,7 +33,7 @@ struct ContentView: View {
     @State private var showingThankYou = false
     @State private var easterEggTapCount = 0
 
-    /// Focus state for custom search bar
+    /// Focus state for search bar
     @FocusState private var isSearchFieldFocused: Bool
 
 
@@ -134,8 +134,9 @@ struct ContentView: View {
 
     // MARK: - View Components
 
-    /// Custom search bar replacing native .searchable()
-    private var searchBarContent: some View {
+    /// Custom search bar with full hit area
+    @ViewBuilder
+    private var customSearchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
@@ -161,20 +162,9 @@ struct ContentView: View {
             }
         }
         .padding(10)
-    }
-
-    @ViewBuilder
-    private var customSearchBar: some View {
-        Group {
-            if #available(iOS 26, *) {
-                searchBarContent
-                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
-            } else {
-                searchBarContent
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { isSearchFieldFocused = true }
+        .modifier(GlassOrFillModifier(cornerRadius: 10))
         .padding(.horizontal)
         .padding(.top, 8)
     }
@@ -182,50 +172,37 @@ struct ContentView: View {
     /// Search suggestions shown below the custom search bar
     private var searchSuggestionsView: some View {
         ScrollView {
-            suggestionsListContent
-                .padding(.horizontal)
-        }
-        .scrollDismissesKeyboard(.interactively)
-    }
-
-    @ViewBuilder
-    private var suggestionsListContent: some View {
-        let list = LazyVStack(alignment: .leading, spacing: 0) {
-            ForEach(filteredStations.prefix(8)) { site in
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    selectStation(name: site.name, siteID: String(site.id))
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "tram.fill")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 24)
-                            .accessibilityHidden(true)
-                        Text(site.name)
-                            .foregroundStyle(.primary)
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(filteredStations.prefix(8)) { site in
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        selectStation(name: site.name, siteID: String(site.id))
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "tram.fill")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24)
+                                .accessibilityHidden(true)
+                            Text(site.name)
+                                .foregroundStyle(.primary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
-                if site.id != filteredStations.prefix(8).last?.id {
-                    Divider()
-                        .padding(.leading, 52)
+                    if site.id != filteredStations.prefix(8).last?.id {
+                        Divider()
+                            .padding(.leading, 52)
+                    }
                 }
             }
+            .modifier(GlassOrFillModifier(cornerRadius: 10))
+            .padding(.horizontal)
         }
-
-        if #available(iOS 26, *) {
-            list.glassEffect(.regular, in: .rect(cornerRadius: 10))
-        } else {
-            list.background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.systemGray6))
-            )
-        }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     /// Home screen view
@@ -236,10 +213,6 @@ struct ContentView: View {
             if isSearchFieldFocused && !filteredStations.isEmpty {
                 searchSuggestionsView
                     .padding(.top, 8)
-                    .transition(.opacity)
-            } else if !viewModel.departures.isEmpty {
-                departuresList
-                    .padding(.top, 16)
                     .transition(.opacity)
             } else if !isSearchFieldFocused {
                 Group {
@@ -485,9 +458,8 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
     private var pinnedStationsListContent: some View {
-        let list = LazyVStack(spacing: 0) {
+        LazyVStack(spacing: 0) {
             ForEach(pinnedManager.pinnedStations, id: \.id) { station in
                 PinnedStationRow(
                     station: station,
@@ -501,15 +473,7 @@ struct ContentView: View {
                 }
             }
         }
-
-        if #available(iOS 26, *) {
-            list.glassEffect(.regular, in: .rect(cornerRadius: 12))
-        } else {
-            list.background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
-            )
-        }
+        .modifier(GlassOrFillModifier(cornerRadius: 12))
     }
 
     /// Footer section
@@ -834,6 +798,22 @@ struct DepartureRowView: View {
         }
     }
 
+}
+
+// MARK: - Glass or Fill Modifier
+
+/// Applies liquid glass on iOS 26+, falls back to systemGray6 fill
+struct GlassOrFillModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            content
+                .background(RoundedRectangle(cornerRadius: cornerRadius).fill(Color(.systemGray6)))
+        }
+    }
 }
 
 // MARK: - Filter Pill Button
