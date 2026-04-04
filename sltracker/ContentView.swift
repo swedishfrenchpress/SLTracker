@@ -42,6 +42,9 @@ struct ContentView: View {
     /// Selected transport mode filter (nil = show all)
     @State private var selectedTransportFilter: String? = nil
 
+    /// Accessibility: reduce or disable animations for motion-sensitive users
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
 
     /// Tracked tasks for proper cancellation
     @State private var selectStationTask: Task<Void, Never>?
@@ -71,6 +74,7 @@ struct ContentView: View {
                     }
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
+                    .transition(.opacity)
                 }
 
                 // Main content layers with iOS-standard navigation animations
@@ -90,7 +94,7 @@ struct ContentView: View {
                         .zIndex(1)
                 }
             }
-            .animation(.easeInOut(duration: 0.35), value: isSearchMode)
+            .animation(reduceMotion ? .none : .easeInOut(duration: 0.35), value: isSearchMode)
             .navigationTitle(isSearchMode ? stationName : "SL Tracker")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -123,8 +127,8 @@ struct ContentView: View {
                             Button(action: refreshDepartures) {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.body.weight(.medium))
-                                    .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                    .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                                    .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
+                                    .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                             }
                             .tint(.primary)
                             .accessibilityLabel("Refresh departures")
@@ -135,8 +139,8 @@ struct ContentView: View {
                         Button(action: refreshDepartures) {
                             Image(systemName: "arrow.clockwise")
                                 .font(.body.weight(.medium))
-                                .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                                .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
+                                .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
                         .tint(.primary)
                         .accessibilityLabel("Refresh departures")
@@ -157,7 +161,7 @@ struct ContentView: View {
         // Easter egg overlay — above NavigationStack, covers nav bar
         ThankYouView(isVisible: $showingThankYou)
         }
-        .animation(.easeInOut(duration: 0.3), value: showingThankYou)
+        .animation(reduceMotion ? .none : .easeInOut(duration: 0.3), value: showingThankYou)
     }
 
     // MARK: - View Components
@@ -289,22 +293,16 @@ struct ContentView: View {
     private var contentSection: some View {
         VStack {
             if viewModel.isLoading {
-                // Loading state - always show when loading in search mode
                 loadingView
             } else if let errorMessage = viewModel.errorMessage {
-                // Error state
                 errorView(message: errorMessage)
             } else if !viewModel.departures.isEmpty {
-                // Departures list
                 departuresList
             } else if !viewModel.currentStation.isEmpty {
-                // No departures found
                 noDeparturesView
             } else if !isSearchMode {
-                // Initial state - only show on home screen, not in search mode
                 initialView
             } else {
-                // Empty space in search mode when no station selected yet
                 Spacer()
             }
         }
@@ -324,7 +322,6 @@ struct ContentView: View {
                 .opacity(0.8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .transition(.opacity.combined(with: .scale(scale: 0.9)).animation(.easeInOut(duration: 0.3)))
     }
 
     /// Error message display
@@ -364,7 +361,7 @@ struct ContentView: View {
                         color: .primary,
                         isSelected: selectedTransportFilter == nil
                     ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
+                        withAnimation(.easeInOut(duration: 0.3)) {
                             selectedTransportFilter = nil
                         }
                     }
@@ -376,7 +373,7 @@ struct ContentView: View {
                             color: transportModeColor(for: mode),
                             isSelected: selectedTransportFilter == mode
                         ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
                                 selectedTransportFilter = mode
                             }
                         }
@@ -401,11 +398,6 @@ struct ContentView: View {
                                 .padding(.horizontal)
                                 .padding(.vertical, 8)
                                 .id(departure.id)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .trailing))
-                                        .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
-                                    removal: .opacity.animation(.easeInOut(duration: 0.2))
-                                ))
                                 .modifier(ScrollFadeModifier(index: index))
 
                             if index < filteredDepartures.count - 1 {
@@ -418,7 +410,6 @@ struct ContentView: View {
                 .coordinateSpace(name: "scroll")
             }
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.35)))
     }
 
     /// No departures found message
@@ -451,8 +442,8 @@ struct ContentView: View {
                         .imageScale(.large)
                         .foregroundStyle(.blue)
                         .accessibilityHidden(true)
-                        .scaleEffect(isEmptyStatePulsing ? 1.05 : 1.0)
-                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isEmptyStatePulsing)
+                        .scaleEffect(isEmptyStatePulsing && !reduceMotion ? 1.05 : 1.0)
+                        .animation(reduceMotion ? .none : .easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isEmptyStatePulsing)
                         .onAppear {
                             isEmptyStatePulsing = true
                         }
@@ -466,12 +457,10 @@ struct ContentView: View {
                         .opacity(0.8)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity.combined(with: .scale(scale: 0.9)).animation(.easeInOut(duration: 0.5)))
             } else {
                 // Pinned stations
                 pinnedStationsView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.4)))
             }
         }
     }
@@ -584,7 +573,7 @@ struct ContentView: View {
         stationName = name
         viewModel.currentSiteID = siteID
 
-        withAnimation(.easeInOut(duration: 0.35)) {
+        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.35)) {
             isSearchMode = true
         }
 
@@ -621,7 +610,7 @@ struct ContentView: View {
         filteredStations = []
         stationName = ""
 
-        withAnimation(.easeInOut(duration: 0.35)) {
+        withAnimation(reduceMotion ? .none : .easeInOut(duration: 0.35)) {
             isSearchMode = false
             selectedTransportFilter = nil
             viewModel.clearDepartures()
@@ -790,13 +779,10 @@ struct PinnedStationRow: View {
 struct DepartureRowView: View {
     let departure: Departure
 
-    @State private var isVisible = false
-
     var body: some View {
         HStack(spacing: 16) {
             // Line number and direction
             VStack(alignment: .leading, spacing: 6) {
-                // Colored line number box with subtle animation
                 Text(departure.line.designation)
                     .font(.callout.bold())
                     .foregroundStyle(.white)
@@ -804,44 +790,24 @@ struct DepartureRowView: View {
                     .background(lineColor(for: departure))
                     .clipShape(.rect(cornerRadius: 8))
                     .shadow(color: lineColor(for: departure).opacity(0.3), radius: 4, x: 0, y: 2)
-                    .scaleEffect(isVisible ? 1.0 : 0.8)
-                    .opacity(isVisible ? 1.0 : 0.0)
 
                 Text(departure.destination)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .opacity(isVisible ? 1.0 : 0.0)
             }
 
             Spacer()
 
-            // Departure time with pulse animation for urgent departures
             VStack(alignment: .trailing, spacing: 4) {
                 Text(departure.display)
                     .font(.headline)
                     .foregroundStyle(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
-                    .scaleEffect(departure.display.contains("Nu") ? (isVisible ? 1.1 : 1.0) : 1.0)
-                    .opacity(isVisible ? 1.0 : 0.0)
 
                 if let platform = departure.stopPoint.designation {
                     Text("Platform \(platform)")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                        .opacity(isVisible ? 1.0 : 0.0)
-                }
-            }
-        }
-        .onAppear {
-            // Snappier initial animation to work with scroll-based animations
-            withAnimation(.easeOut(duration: 0.2)) {
-                isVisible = true
-            }
-
-            // Add pulse animation for urgent departures
-            if departure.display.contains("Nu") {
-                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                    isVisible = true
                 }
             }
         }
@@ -1010,7 +976,11 @@ struct ThankYouView: View {
                 }
                 .padding(.vertical, 80)
             }
-            .overlay(ConfettiView().allowsHitTesting(false).ignoresSafeArea())
+            .overlay {
+                if !UIAccessibility.isReduceMotionEnabled {
+                    ConfettiView().allowsHitTesting(false).ignoresSafeArea()
+                }
+            }
             .transition(.opacity)
         }
     }
@@ -1022,6 +992,7 @@ struct ThankYouView: View {
 struct ScrollFadeModifier: ViewModifier {
     let index: Int
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isVisible = false
 
     private let fadeInDuration: Double = 0.2
@@ -1030,10 +1001,10 @@ struct ScrollFadeModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .opacity(isVisible ? 1.0 : 0.0)
-            .scaleEffect(isVisible ? 1.0 : 0.98)
+            .opacity(reduceMotion || isVisible ? 1.0 : 0.0)
+            .scaleEffect(reduceMotion || isVisible ? 1.0 : 0.98)
             .animation(
-                .easeOut(duration: isVisible ? fadeInDuration : fadeOutDuration)
+                reduceMotion ? .none : .easeOut(duration: isVisible ? fadeInDuration : fadeOutDuration)
                 .delay(Double(index) * staggerDelay),
                 value: isVisible
             )
