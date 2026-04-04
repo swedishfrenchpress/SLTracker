@@ -57,6 +57,20 @@ struct ContentView: View {
                 Color(.systemBackground)
                     .ignoresSafeArea()
 
+                // Subtle Stockholm map background on home screen
+                if !isSearchMode {
+                    GeometryReader { geo in
+                        Image("BackgroundMap")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
+                            .opacity(0.15)
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                }
+
                 // Main content layers with iOS-standard navigation animations
                 switch isSearchMode {
                 case false:
