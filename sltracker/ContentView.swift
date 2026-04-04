@@ -79,6 +79,7 @@ struct ContentView: View {
             .navigationDestination(isPresented: $isSearchMode) {
                 searchResultsView
                     .navigationTitle(stationName)
+                    .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             HStack(spacing: 16) {
@@ -291,19 +292,23 @@ struct ContentView: View {
         VStack {
             if viewModel.isLoading {
                 loadingView
+                    .transition(.opacity)
             } else if let errorMessage = viewModel.errorMessage {
                 errorView(message: errorMessage)
+                    .transition(.opacity)
             } else if !viewModel.departures.isEmpty {
                 departuresList
+                    .transition(.opacity)
             } else if !viewModel.currentStation.isEmpty {
                 noDeparturesView
-            } else if !isSearchMode {
-                initialView
+                    .transition(.opacity)
             } else {
                 Spacer()
             }
         }
-        .padding(.top, isSearchMode ? 16 : 32)
+        .animation(reduceMotion ? .none : .default, value: viewModel.isLoading)
+        .animation(reduceMotion ? .none : .default, value: viewModel.departures.isEmpty)
+        .padding(.top, 16)
     }
 
     /// Loading indicator with beautiful animations
