@@ -165,7 +165,7 @@ struct ContentView: View {
     // MARK: - View Components
 
     /// Custom search bar replacing native .searchable()
-    private var customSearchBar: some View {
+    private var searchBarContent: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
@@ -191,8 +191,20 @@ struct ContentView: View {
             }
         }
         .padding(10)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private var customSearchBar: some View {
+        Group {
+            if #available(iOS 26, *) {
+                searchBarContent
+                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
+            } else {
+                searchBarContent
+                    .background(Color(.systemGray6))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
         .padding(.horizontal)
         .padding(.top, 8)
     }
@@ -200,40 +212,50 @@ struct ContentView: View {
     /// Search suggestions shown below the custom search bar
     private var searchSuggestionsView: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(filteredStations.prefix(8)) { site in
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        selectStation(name: site.name, siteID: String(site.id))
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "tram.fill")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 24)
-                                .accessibilityHidden(true)
-                            Text(site.name)
-                                .foregroundStyle(.primary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+            suggestionsListContent
+                .padding(.horizontal)
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
 
-                    if site.id != filteredStations.prefix(8).last?.id {
-                        Divider()
-                            .padding(.leading, 52)
+    @ViewBuilder
+    private var suggestionsListContent: some View {
+        let list = LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(filteredStations.prefix(8)) { site in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    selectStation(name: site.name, siteID: String(site.id))
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "tram.fill")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+                            .accessibilityHidden(true)
+                        Text(site.name)
+                            .foregroundStyle(.primary)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if site.id != filteredStations.prefix(8).last?.id {
+                    Divider()
+                        .padding(.leading, 52)
                 }
             }
-            .background(
+        }
+
+        if #available(iOS 26, *) {
+            list.glassEffect(.regular, in: .rect(cornerRadius: 10))
+        } else {
+            list.background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(.systemGray6))
             )
-            .padding(.horizontal)
         }
-        .scrollDismissesKeyboard(.interactively)
     }
 
     /// Home screen view
@@ -352,34 +374,47 @@ struct ContentView: View {
         let modes = availableTransportModes
         if modes.count >= 2 {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    FilterPillButton(
-                        label: "All",
-                        icon: nil,
-                        color: .primary,
-                        isSelected: selectedTransportFilter == nil
-                    ) {
-                        withAnimation {
-                            selectedTransportFilter = nil
-                        }
-                    }
-
-                    ForEach(modes, id: \.self) { mode in
-                        FilterPillButton(
-                            label: transportModeName(for: mode),
-                            icon: transportModeIcon(for: mode),
-                            color: transportModeColor(for: mode),
-                            isSelected: selectedTransportFilter == mode
-                        ) {
-                            withAnimation {
-                                selectedTransportFilter = mode
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal)
+                filterPillsContent
             }
             .padding(.bottom, 8)
+        }
+    }
+
+    @ViewBuilder
+    private var filterPillsContent: some View {
+        let pills = HStack(spacing: 8) {
+            FilterPillButton(
+                label: "All",
+                icon: nil,
+                color: .primary,
+                isSelected: selectedTransportFilter == nil
+            ) {
+                withAnimation {
+                    selectedTransportFilter = nil
+                }
+            }
+
+            ForEach(availableTransportModes, id: \.self) { mode in
+                FilterPillButton(
+                    label: transportModeName(for: mode),
+                    icon: transportModeIcon(for: mode),
+                    color: transportModeColor(for: mode),
+                    isSelected: selectedTransportFilter == mode
+                ) {
+                    withAnimation {
+                        selectedTransportFilter = mode
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 8) {
+                pills
+            }
+        } else {
+            pills
         }
     }
 
@@ -460,27 +495,37 @@ struct ContentView: View {
             }
             .padding(.horizontal)
 
-            LazyVStack(spacing: 0) {
-                ForEach(pinnedManager.pinnedStations, id: \.id) { station in
-                    PinnedStationRow(
-                        station: station,
-                        onTap: { selectPinnedStation(station) },
-                        onUnpin: { pinnedManager.unpinStation(id: station.id) }
-                    )
+            pinnedStationsListContent
+                .padding(.horizontal)
 
-                    if station.id != pinnedManager.pinnedStations.last?.id {
-                        Divider()
-                            .padding(.leading, 60)
-                    }
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var pinnedStationsListContent: some View {
+        let list = LazyVStack(spacing: 0) {
+            ForEach(pinnedManager.pinnedStations, id: \.id) { station in
+                PinnedStationRow(
+                    station: station,
+                    onTap: { selectPinnedStation(station) },
+                    onUnpin: { pinnedManager.unpinStation(id: station.id) }
+                )
+
+                if station.id != pinnedManager.pinnedStations.last?.id {
+                    Divider()
+                        .padding(.leading, 60)
                 }
             }
-            .background(
+        }
+
+        if #available(iOS 26, *) {
+            list.glassEffect(.regular, in: .rect(cornerRadius: 12))
+        } else {
+            list.background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(.systemGray6))
             )
-            .padding(.horizontal)
-
-            Spacer()
         }
     }
 
@@ -826,25 +871,37 @@ struct FilterPillButton: View {
     let isSelected: Bool
     let action: () -> Void
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.caption.weight(.medium))
-                }
-                Text(label)
+    private var pillContent: some View {
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
                     .font(.caption.weight(.medium))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? color.opacity(0.15) : Color(.systemGray6))
-            .foregroundStyle(isSelected ? color : .secondary)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(isSelected ? color.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
+            Text(label)
+                .font(.caption.weight(.medium))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .foregroundStyle(isSelected ? color : .secondary)
+    }
+
+    var body: some View {
+        Button(action: action) {
+            if #available(iOS 26, *) {
+                pillContent
+                    .glassEffect(
+                        isSelected ? .regular.interactive().tint(color) : .regular.interactive(),
+                        in: .capsule
+                    )
+            } else {
+                pillContent
+                    .background(isSelected ? color.opacity(0.15) : Color(.systemGray6))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(isSelected ? color.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
+            }
         }
         .buttonStyle(.plain)
     }
