@@ -61,89 +61,50 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                 // Subtle Stockholm map background on home screen
-                if !isSearchMode {
-                    GeometryReader { geo in
-                        Image("BackgroundMap")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geo.size.width, height: geo.size.height)
-                            .clipped()
-                            .opacity(0.3)
-                    }
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
+                GeometryReader { geo in
+                    Image("BackgroundMap")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .opacity(0.3)
                 }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
-                // Main content layers
-                Group {
-                    switch isSearchMode {
-                    case false:
-                        homeScreenView
-                            .zIndex(0)
-
-                    case true:
-                        searchResultsView
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
-                            .zIndex(1)
-                    }
-                }
-                .animation(reduceMotion ? .none : .default, value: isSearchMode)
+                homeScreenView
             }
-            .navigationTitle(isSearchMode ? stationName : "SL Tracker")
+            .navigationTitle("SL Tracker")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                if isSearchMode {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button(action: resetSearch) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.body.weight(.medium))
-                                Text("Back")
-                                    .font(.body)
-                            }
-                        }
-                        .tint(.primary)
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        HStack(spacing: 16) {
-                            Button(action: {
-                                let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
-                                let relatedIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
-                                pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes, relatedSiteIDs: relatedIDs)
-                            }) {
-                                Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                                    .font(.body.weight(.medium))
-                                    .contentTransition(.symbolEffect(.replace))
-                            }
-                            .tint(.primary)
-                            .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
+            .navigationDestination(isPresented: $isSearchMode) {
+                searchResultsView
+                    .navigationTitle(stationName)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            HStack(spacing: 16) {
+                                Button(action: {
+                                    let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
+                                    let relatedIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
+                                    pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes, relatedSiteIDs: relatedIDs)
+                                }) {
+                                    Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
+                                        .font(.body.weight(.medium))
+                                        .contentTransition(.symbolEffect(.replace))
+                                }
+                                .tint(.primary)
+                                .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
 
-                            Button(action: refreshDepartures) {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.body.weight(.medium))
-                                    .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
-                                    .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                                Button(action: refreshDepartures) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.body.weight(.medium))
+                                        .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
+                                        .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                                }
+                                .tint(.primary)
+                                .accessibilityLabel("Refresh departures")
                             }
-                            .tint(.primary)
-                            .accessibilityLabel("Refresh departures")
                         }
                     }
-                } else if !viewModel.departures.isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(action: refreshDepartures) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.body.weight(.medium))
-                                .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
-                                .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                        }
-                        .tint(.primary)
-                        .accessibilityLabel("Refresh departures")
-                    }
-                }
             }
         }
         .onChange(of: navigationState.shouldNavigateToStation) { _, shouldNavigate in
@@ -151,6 +112,14 @@ struct ContentView: View {
                 let siteID = SiteStore.shared.getSiteID(for: name) ?? ""
                 selectStation(name: name, siteID: siteID)
                 navigationState.clearNavigationTarget()
+            }
+        }
+        .onChange(of: isSearchMode) { _, newValue in
+            if !newValue {
+                // Clean up when navigating back (system back button or swipe)
+                stationName = ""
+                selectedTransportFilter = nil
+                viewModel.clearDepartures()
             }
         }
         .blur(radius: showingThankYou ? 8 : 0)
@@ -609,11 +578,8 @@ struct ContentView: View {
         filteredStations = []
         selectedTransportFilter = nil
         viewModel.currentSiteID = siteID
-
-        withAnimation(reduceMotion ? .none : .default) {
-            stationName = name
-            isSearchMode = true
-        }
+        stationName = name
+        isSearchMode = true
 
         selectStationTask?.cancel()
         selectStationTask = Task {
@@ -646,13 +612,7 @@ struct ContentView: View {
     private func resetSearch() {
         isSearchFieldFocused = false
         filteredStations = []
-
-        withAnimation(reduceMotion ? .none : .default) {
-            stationName = ""
-            isSearchMode = false
-            selectedTransportFilter = nil
-            viewModel.clearDepartures()
-        }
+        isSearchMode = false
     }
 
     /// Refreshes the current departures by calling the API again
