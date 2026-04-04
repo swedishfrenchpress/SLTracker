@@ -266,16 +266,21 @@ struct ContentView: View {
             if isSearchFieldFocused && !filteredStations.isEmpty {
                 searchSuggestionsView
                     .padding(.top, 8)
+                    .transition(.opacity)
             } else if !viewModel.departures.isEmpty {
                 departuresList
                     .padding(.top, 16)
+                    .transition(.opacity)
             } else if !isSearchFieldFocused {
-                initialView
-                    .padding(.top, 32)
+                Group {
+                    initialView
+                        .padding(.top, 32)
 
-                Spacer()
+                    Spacer()
 
-                footerSection
+                    footerSection
+                }
+                .transition(.opacity)
             } else {
                 Spacer()
             }
@@ -287,12 +292,15 @@ struct ContentView: View {
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(reduceMotion ? .none : .default, value: isSearchFieldFocused)
         .onChange(of: stationName) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                filteredStations = []
-            } else {
-                filteredStations = SiteStore.shared.search(query: trimmed)
+            withAnimation(reduceMotion ? .none : .default) {
+                if trimmed.isEmpty {
+                    filteredStations = []
+                } else {
+                    filteredStations = SiteStore.shared.search(query: trimmed)
+                }
             }
         }
     }
