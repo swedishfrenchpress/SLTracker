@@ -94,106 +94,49 @@ struct ContentView: View {
             .toolbar {
                 if isSearchMode {
                     ToolbarItem(placement: .topBarLeading) {
-                        Group {
-                            if #available(iOS 26, *) {
-                                Button(action: resetSearch) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "chevron.left")
-                                            .font(.body.weight(.medium))
-                                        Text("Back")
-                                            .font(.body)
-                                    }
-                                }
-                                .buttonStyle(.glass)
-                            } else {
-                                Button(action: resetSearch) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "chevron.left")
-                                            .font(.body.weight(.medium))
-                                        Text("Back")
-                                            .font(.body)
-                                    }
-                                }
-                                .tint(.primary)
+                        Button(action: resetSearch) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.body.weight(.medium))
+                                Text("Back")
+                                    .font(.body)
                             }
                         }
+                        .tint(.primary)
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         HStack(spacing: 16) {
-                            // Pin/Unpin button
-                            Group {
-                                if #available(iOS 26, *) {
-                                    Button(action: {
-                                        let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
-                                        pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
-                                    }) {
-                                        Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                                            .font(.body.weight(.medium))
-                                            .contentTransition(.symbolEffect(.replace))
-                                    }
-                                    .buttonStyle(.glass)
-                                    .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
-                                } else {
-                                    Button(action: {
-                                        let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
-                                        pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
-                                    }) {
-                                        Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                                            .font(.body.weight(.medium))
-                                            .contentTransition(.symbolEffect(.replace))
-                                    }
-                                    .tint(.primary)
-                                    .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
-                                }
+                            Button(action: {
+                                let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
+                                pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
+                            }) {
+                                Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
+                                    .font(.body.weight(.medium))
+                                    .contentTransition(.symbolEffect(.replace))
                             }
+                            .tint(.primary)
+                            .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
 
-                            // Refresh button
-                            Group {
-                                if #available(iOS 26, *) {
-                                    Button(action: refreshDepartures) {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.body.weight(.medium))
-                                            .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                            .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                    }
-                                    .buttonStyle(.glass)
-                                    .accessibilityLabel("Refresh departures")
-                                } else {
-                                    Button(action: refreshDepartures) {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.body.weight(.medium))
-                                            .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                            .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                    }
-                                    .tint(.primary)
-                                    .accessibilityLabel("Refresh departures")
-                                }
+                            Button(action: refreshDepartures) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.body.weight(.medium))
+                                    .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                                    .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                             }
+                            .tint(.primary)
+                            .accessibilityLabel("Refresh departures")
                         }
                     }
                 } else if !viewModel.departures.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Group {
-                            if #available(iOS 26, *) {
-                                Button(action: refreshDepartures) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.body.weight(.medium))
-                                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                        .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                }
-                                .buttonStyle(.glass)
-                                .accessibilityLabel("Refresh departures")
-                            } else {
-                                Button(action: refreshDepartures) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.body.weight(.medium))
-                                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                        .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                }
-                                .tint(.primary)
-                                .accessibilityLabel("Refresh departures")
-                            }
+                        Button(action: refreshDepartures) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.body.weight(.medium))
+                                .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
+                                .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                         }
+                        .tint(.primary)
+                        .accessibilityLabel("Refresh departures")
                     }
                 }
             }
@@ -239,6 +182,7 @@ struct ContentView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(10)
@@ -261,6 +205,7 @@ struct ContentView: View {
                             Image(systemName: "tram.fill")
                                 .foregroundStyle(.secondary)
                                 .frame(width: 24)
+                                .accessibilityHidden(true)
                             Text(site.name)
                                 .foregroundStyle(.primary)
                         }
@@ -385,6 +330,7 @@ struct ContentView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
                 .foregroundStyle(.orange)
+                .accessibilityHidden(true)
 
             Text("Error")
                 .font(.headline)
@@ -478,6 +424,7 @@ struct ContentView: View {
             Image(systemName: "tram")
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             Text("No departures found")
                 .font(.headline)
@@ -497,8 +444,10 @@ struct ContentView: View {
                 // Empty state with subtle animation
                 VStack(spacing: 24) {
                     Image(systemName: "tram.fill")
-                        .font(.system(size: 48))
+                        .font(.largeTitle)
+                        .imageScale(.large)
                         .foregroundStyle(.blue)
+                        .accessibilityHidden(true)
                         .scaleEffect(isEmptyStatePulsing ? 1.05 : 1.0)
                         .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isEmptyStatePulsing)
                         .onAppear {
@@ -549,18 +498,10 @@ struct ContentView: View {
                     }
                 }
             }
-            .background {
-                if #available(iOS 26, *) {
-                    // Use Liquid Glass effect on iOS 26+
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.clear)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 12))
-                } else {
-                    // Fallback for older iOS versions
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
-                }
-            }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemGray6))
+            )
             .padding(.horizontal)
 
             Spacer()

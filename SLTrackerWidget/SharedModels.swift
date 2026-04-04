@@ -277,9 +277,6 @@ class APIManager {
     /// The base URL for the SL Transport API
     private let baseURL = "https://transport.integration.sl.se/v1"
     
-    /// Your API key for accessing the SL Transport API
-    /// Note: You'll need to get this from https://www.trafiklab.se/
-    private let apiKey = "b890520205904723b2fd61a42c46b332"
 
     /// Fetches all departures for a specific site
     func fetchDepartures(for siteID: String) async throws -> [Departure] {
