@@ -361,7 +361,7 @@ struct ContentView: View {
                         color: .primary,
                         isSelected: selectedTransportFilter == nil
                     ) {
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation {
                             selectedTransportFilter = nil
                         }
                     }
@@ -373,7 +373,7 @@ struct ContentView: View {
                             color: transportModeColor(for: mode),
                             isSelected: selectedTransportFilter == mode
                         ) {
-                            withAnimation(.easeInOut(duration: 0.3)) {
+                            withAnimation {
                                 selectedTransportFilter = mode
                             }
                         }
@@ -393,21 +393,19 @@ struct ContentView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(filteredDepartures.enumerated()), id: \.element.id) { index, departure in
+                        ForEach(filteredDepartures, id: \.id) { departure in
                             DepartureRowView(departure: departure)
                                 .padding(.horizontal)
                                 .padding(.vertical, 8)
                                 .id(departure.id)
-                                .modifier(ScrollFadeModifier(index: index))
 
-                            if index < filteredDepartures.count - 1 {
+                            if departure.id != filteredDepartures.last?.id {
                                 Divider()
                                     .padding(.leading)
                             }
                         }
                     }
                 }
-                .coordinateSpace(name: "scroll")
             }
         }
     }
@@ -968,7 +966,7 @@ struct ThankYouView: View {
 
                     // Simple close text
                     Button("Close") {
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation {
                             isVisible = false
                         }
                     }
@@ -986,35 +984,3 @@ struct ThankYouView: View {
     }
 }
 
-// MARK: - Scroll Fade Modifier
-
-/// A custom modifier that applies staggered fade-in/out animations as items appear and disappear
-struct ScrollFadeModifier: ViewModifier {
-    let index: Int
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isVisible = false
-
-    private let fadeInDuration: Double = 0.2
-    private let fadeOutDuration: Double = 0.15
-    private let staggerDelay: Double = 0.01
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(reduceMotion || isVisible ? 1.0 : 0.0)
-            .scaleEffect(reduceMotion || isVisible ? 1.0 : 0.98)
-            .animation(
-                reduceMotion ? .none : .easeOut(duration: isVisible ? fadeInDuration : fadeOutDuration)
-                .delay(Double(index) * staggerDelay),
-                value: isVisible
-            )
-            .onAppear {
-                withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
-                    isVisible = true
-                }
-            }
-            .onDisappear {
-                isVisible = false
-            }
-    }
-}
