@@ -157,12 +157,14 @@ struct PinnedStation: Codable, Identifiable, Equatable {
     let name: String
     let pinnedAt: Date
     var transportModes: [String]
+    var relatedSiteIDs: [String]
 
-    init(id: String, name: String, transportModes: [String] = ["METRO"]) {
+    init(id: String, name: String, transportModes: [String] = ["METRO"], relatedSiteIDs: [String] = []) {
         self.id = id
         self.name = name
         self.pinnedAt = Date()
         self.transportModes = transportModes
+        self.relatedSiteIDs = relatedSiteIDs
     }
 
     init(from decoder: Decoder) throws {
@@ -171,6 +173,7 @@ struct PinnedStation: Codable, Identifiable, Equatable {
         name = try container.decode(String.self, forKey: .name)
         pinnedAt = try container.decode(Date.self, forKey: .pinnedAt)
         transportModes = try container.decodeIfPresent([String].self, forKey: .transportModes) ?? ["METRO"]
+        relatedSiteIDs = try container.decodeIfPresent([String].self, forKey: .relatedSiteIDs) ?? []
     }
 }
 

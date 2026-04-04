@@ -158,12 +158,14 @@ struct PinnedStation: Codable, Identifiable, Equatable {
     let name: String
     let pinnedAt: Date
     var transportModes: [String]
+    var relatedSiteIDs: [String]
 
-    init(id: String, name: String, transportModes: [String] = ["METRO"]) {
+    init(id: String, name: String, transportModes: [String] = ["METRO"], relatedSiteIDs: [String] = []) {
         self.id = id
         self.name = name
         self.pinnedAt = Date()
         self.transportModes = transportModes
+        self.relatedSiteIDs = relatedSiteIDs
     }
 
     init(from decoder: Decoder) throws {
@@ -172,6 +174,7 @@ struct PinnedStation: Codable, Identifiable, Equatable {
         name = try container.decode(String.self, forKey: .name)
         pinnedAt = try container.decode(Date.self, forKey: .pinnedAt)
         transportModes = try container.decodeIfPresent([String].self, forKey: .transportModes) ?? ["METRO"]
+        relatedSiteIDs = try container.decodeIfPresent([String].self, forKey: .relatedSiteIDs) ?? []
     }
 }
 
@@ -224,11 +227,11 @@ final class PinnedStationsManager {
     }
     
     /// Pin a station
-    func pinStation(id: String, name: String, transportModes: [String] = ["METRO"]) {
+    func pinStation(id: String, name: String, transportModes: [String] = ["METRO"], relatedSiteIDs: [String] = []) {
         // Don't pin if already pinned
         guard !isStationPinned(id: id) else { return }
 
-        let newStation = PinnedStation(id: id, name: name, transportModes: transportModes)
+        let newStation = PinnedStation(id: id, name: name, transportModes: transportModes, relatedSiteIDs: relatedSiteIDs)
         pinnedStations.insert(newStation, at: 0)
         
         // Remove oldest if over limit
@@ -246,11 +249,11 @@ final class PinnedStationsManager {
     }
     
     /// Toggle pin status
-    func togglePin(id: String, name: String, transportModes: [String] = ["METRO"]) {
+    func togglePin(id: String, name: String, transportModes: [String] = ["METRO"], relatedSiteIDs: [String] = []) {
         if isStationPinned(id: id) {
             unpinStation(id: id)
         } else {
-            pinStation(id: id, name: name, transportModes: transportModes)
+            pinStation(id: id, name: name, transportModes: transportModes, relatedSiteIDs: relatedSiteIDs)
         }
     }
 }

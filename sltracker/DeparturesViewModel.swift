@@ -37,43 +37,54 @@ final class DeparturesViewModel {
 
     // MARK: - Public Methods
 
-    /// Fetches all departures for a specific site
+    /// Fetches all departures for a station and its related sub-stations
     func fetchDepartures(for siteID: String, stationName: String) {
         errorMessage = nil
         isLoading = true
         currentStation = stationName
         currentSiteID = siteID
 
+        // Get all related site IDs (e.g., Slussen, Slussen/Stadsgården, etc.)
+        let allIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
+        let idsToFetch = allIDs.isEmpty ? [siteID] : allIDs
+
         Task {
             do {
-                let fetchedDepartures = try await apiManager.fetchDepartures(for: siteID)
-                
-                // Filter out departures that are already in the past
-                let now = Date()
-                let futureDepartures = fetchedDepartures.filter { dep in
-                    parseDate(from: dep.expected) >= now
+                // Fetch departures from all related stations in parallel
+                let allDepartures = try await withThrowingTaskGroup(of: [Departure].self) { group in
+                    for id in idsToFetch {
+                        group.addTask { [apiManager] in
+                            try await apiManager.fetchDepartures(for: id)
+                        }
+                    }
+
+                    var merged: [Departure] = []
+                    for try await batch in group {
+                        merged.append(contentsOf: batch)
+                    }
+                    return merged
                 }
 
-                // Sort departures by expected time (earliest first)
-                let sortedDepartures = futureDepartures.sorted { departure1, departure2 in
-                    // Convert string dates to Date objects for comparison
-                    let date1 = parseDate(from: departure1.expected)
-                    let date2 = parseDate(from: departure2.expected)
-                    return date1 < date2
+                // Filter out past departures and deduplicate by journey ID
+                let now = Date()
+                var seenJourneys = Set<Int>()
+                let futureDepartures = allDepartures.filter { dep in
+                    guard parseDate(from: dep.expected) >= now else { return false }
+                    guard seenJourneys.insert(dep.journey.id).inserted else { return false }
+                    return true
                 }
-                
-                // Update the departures on the main thread
-                departures = sortedDepartures
-                
-                // Trigger widget update when new data is available
+
+                // Sort by expected time
+                departures = futureDepartures.sorted {
+                    parseDate(from: $0.expected) < parseDate(from: $1.expected)
+                }
+
                 WidgetCenter.shared.reloadAllTimelines()
-                
+
             } catch {
-                // Handle any errors that occurred
                 handleError(error)
             }
-            
-            // Stop loading
+
             isLoading = false
         }
     }

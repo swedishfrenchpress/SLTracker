@@ -110,7 +110,8 @@ struct ContentView: View {
                         HStack(spacing: 16) {
                             Button(action: {
                                 let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
-                                pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
+                                let relatedIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
+                                pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes, relatedSiteIDs: relatedIDs)
                             }) {
                                 Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
                                     .font(.body.weight(.medium))

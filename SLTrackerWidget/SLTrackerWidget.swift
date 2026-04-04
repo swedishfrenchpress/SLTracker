@@ -373,12 +373,29 @@ struct SLTrackerWidgetProvider: TimelineProvider {
             return entry
         }
         
-        // Fetch departures for the first station
+        // Fetch departures for the first station and all related sub-stations
         do {
             let apiManager = APIManager.shared
-            let allDepartures = try await apiManager.fetchDepartures(for: firstStation.id)
-            // Sort by expected time (ISO 8601 strings sort chronologically)
-            let departures = allDepartures.sorted { $0.expected < $1.expected }
+            let idsToFetch = firstStation.relatedSiteIDs.isEmpty ? [firstStation.id] : firstStation.relatedSiteIDs
+
+            let allDepartures = try await withThrowingTaskGroup(of: [Departure].self) { group in
+                for id in idsToFetch {
+                    group.addTask {
+                        try await apiManager.fetchDepartures(for: id)
+                    }
+                }
+                var merged: [Departure] = []
+                for try await batch in group {
+                    merged.append(contentsOf: batch)
+                }
+                return merged
+            }
+
+            // Deduplicate by journey ID and sort by expected time
+            var seenJourneys = Set<Int>()
+            let departures = allDepartures
+                .filter { seenJourneys.insert($0.journey.id).inserted }
+                .sorted { $0.expected < $1.expected }
 
             let entry = SLTrackerWidgetEntry(
                 date: Date(),

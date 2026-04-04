@@ -19,6 +19,7 @@ class SiteStore {
     private var sites: [Site] = []
     private var nameToID: [String: Int] = [:]
     private var idToName: [Int: String] = [:]
+    private var baseNameToIDs: [String: [Int]] = [:]
 
     init() {
         loadSites()
@@ -40,25 +41,55 @@ class SiteStore {
                 nameToID[site.name] = site.id
             }
             idToName[site.id] = site.name
+
+            // Group by base name (before "/" or "(")
+            let base = Self.baseName(for: site.name)
+            let preferredID = nameToID[site.name] ?? site.id
+            if baseNameToIDs[base] == nil {
+                baseNameToIDs[base] = []
+            }
+            if !baseNameToIDs[base]!.contains(preferredID) {
+                baseNameToIDs[base]!.append(preferredID)
+            }
         }
     }
 
-    /// Search for stops matching the query, returns up to 8 results
+    /// Returns the base name of a station (before any "/" or "("), trimmed
+    static func baseName(for name: String) -> String {
+        var result = name
+        if let slashRange = result.range(of: "/") {
+            result = String(result[result.startIndex..<slashRange.lowerBound])
+        }
+        if let parenRange = result.range(of: "(") {
+            result = String(result[result.startIndex..<parenRange.lowerBound])
+        }
+        return result.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Returns all unique site IDs that share the same base name
+    func relatedSiteIDs(for name: String) -> [String] {
+        let base = Self.baseName(for: name)
+        return (baseNameToIDs[base] ?? []).map { String($0) }
+    }
+
+    /// Search for stops matching the query, returns up to 8 results consolidated by base name
     func search(query: String) -> [Site] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        var seen = Set<String>()
+        var seenBaseNames = Set<String>()
         var results: [Site] = []
 
         for site in sites {
             guard site.name.localizedStandardContains(trimmed) else { continue }
 
-            let preferredID = nameToID[site.name] ?? site.id
-            guard !seen.contains(site.name) else { continue }
-            seen.insert(site.name)
+            let base = Self.baseName(for: site.name)
+            guard !seenBaseNames.contains(base) else { continue }
+            seenBaseNames.insert(base)
 
-            results.append(Site(id: preferredID, name: site.name))
+            // Use the canonical ID (9xxx-preferred) for the base name
+            let preferredID = nameToID[base] ?? nameToID[site.name] ?? site.id
+            results.append(Site(id: preferredID, name: base))
             if results.count >= 8 { break }
         }
 
