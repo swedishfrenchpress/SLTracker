@@ -33,17 +33,20 @@ struct ContentView: View {
     @State private var showingThankYou = false
     @State private var easterEggTapCount = 0
 
-    /// Focus state for custom search bar
+    /// Focus state for search bar
     @FocusState private var isSearchFieldFocused: Bool
 
-    /// Empty state animation flag
-    @State private var isEmptyStatePulsing = false
 
     /// Selected transport mode filter (nil = show all)
     @State private var selectedTransportFilter: String? = nil
 
-    /// Controls nav bar display mode independently from isSearchMode for smooth back-navigation
-    @State private var useInlineTitle = false
+    /// Accessibility: reduce or disable animations for motion-sensitive users
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+
+    /// Tracked tasks for proper cancellation
+    @State private var selectStationTask: Task<Void, Never>?
+    @State private var easterEggResetTask: Task<Void, Never>?
 
     // Station data is now loaded from all_sites.json via SiteStore
 
@@ -57,131 +60,52 @@ struct ContentView: View {
                 Color(.systemBackground)
                     .ignoresSafeArea()
 
-                // Main content layers with iOS-standard navigation animations
-                switch isSearchMode {
-                case false:
-                    // Home screen - always present, no insertion animation
-                    homeScreenView
-                        .zIndex(0)
-
-                case true:
-                    // Search results screen - slides in from right, out to right
-                    searchResultsView
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity)
-                        ))
-                        .zIndex(1)
+                // Subtle Stockholm map background on home screen
+                GeometryReader { geo in
+                    Image("BackgroundMap")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .opacity(0.3)
                 }
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+
+                homeScreenView
             }
-            .animation(.easeInOut(duration: 0.35), value: isSearchMode)
-            .navigationTitle(isSearchMode ? stationName : "SL Tracker")
-            .navigationBarTitleDisplayMode(useInlineTitle ? .inline : .large)
-            .toolbar {
-                if isSearchMode {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Group {
-                            if #available(iOS 26, *) {
-                                Button(action: resetSearch) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "chevron.left")
-                                            .font(.body.weight(.medium))
-                                        Text("Back")
-                                            .font(.body)
-                                    }
-                                }
-                                .buttonStyle(.glass)
-                            } else {
-                                Button(action: resetSearch) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "chevron.left")
-                                            .font(.body.weight(.medium))
-                                        Text("Back")
-                                            .font(.body)
-                                    }
+            .navigationTitle("SL Tracker")
+            .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(isPresented: $isSearchMode) {
+                searchResultsView
+                    .navigationTitle(stationName)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            HStack(spacing: 16) {
+                                Button(action: {
+                                    let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
+                                    let relatedIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
+                                    pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes, relatedSiteIDs: relatedIDs)
+                                }) {
+                                    Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
+                                        .font(.body.weight(.medium))
+                                        .contentTransition(.symbolEffect(.replace))
                                 }
                                 .tint(.primary)
-                            }
-                        }
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        HStack(spacing: 16) {
-                            // Pin/Unpin button
-                            Group {
-                                if #available(iOS 26, *) {
-                                    Button(action: {
-                                        let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
-                                        pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
-                                    }) {
-                                        Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                                            .font(.body.weight(.medium))
-                                            .contentTransition(.symbolEffect(.replace))
-                                    }
-                                    .buttonStyle(.glass)
-                                    .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
-                                } else {
-                                    Button(action: {
-                                        let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
-                                        pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes)
-                                    }) {
-                                        Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
-                                            .font(.body.weight(.medium))
-                                            .contentTransition(.symbolEffect(.replace))
-                                    }
-                                    .tint(.primary)
-                                    .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
-                                }
-                            }
+                                .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
 
-                            // Refresh button
-                            Group {
-                                if #available(iOS 26, *) {
-                                    Button(action: refreshDepartures) {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.body.weight(.medium))
-                                            .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                            .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                    }
-                                    .buttonStyle(.glass)
-                                    .accessibilityLabel("Refresh departures")
-                                } else {
-                                    Button(action: refreshDepartures) {
-                                        Image(systemName: "arrow.clockwise")
-                                            .font(.body.weight(.medium))
-                                            .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                            .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                    }
-                                    .tint(.primary)
-                                    .accessibilityLabel("Refresh departures")
-                                }
-                            }
-                        }
-                    }
-                } else if !viewModel.departures.isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Group {
-                            if #available(iOS 26, *) {
                                 Button(action: refreshDepartures) {
                                     Image(systemName: "arrow.clockwise")
                                         .font(.body.weight(.medium))
-                                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                        .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
-                                }
-                                .buttonStyle(.glass)
-                                .accessibilityLabel("Refresh departures")
-                            } else {
-                                Button(action: refreshDepartures) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.body.weight(.medium))
-                                        .rotationEffect(.degrees(viewModel.isLoading ? 360 : 0))
-                                        .animation(viewModel.isLoading ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                                        .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
+                                        .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
                                 }
                                 .tint(.primary)
                                 .accessibilityLabel("Refresh departures")
                             }
                         }
                     }
-                }
             }
         }
         .onChange(of: navigationState.shouldNavigateToStation) { _, shouldNavigate in
@@ -191,18 +115,27 @@ struct ContentView: View {
                 navigationState.clearNavigationTarget()
             }
         }
+        .onChange(of: isSearchMode) { _, newValue in
+            if !newValue {
+                // Clean up when navigating back (system back button or swipe)
+                stationName = ""
+                selectedTransportFilter = nil
+                viewModel.clearDepartures()
+            }
+        }
         .blur(radius: showingThankYou ? 8 : 0)
         .opacity(showingThankYou ? 0.3 : 1)
 
         // Easter egg overlay — above NavigationStack, covers nav bar
         ThankYouView(isVisible: $showingThankYou)
         }
-        .animation(.easeInOut(duration: 0.3), value: showingThankYou)
+        .animation(reduceMotion ? .none : .default, value: showingThankYou)
     }
 
     // MARK: - View Components
 
-    /// Custom search bar replacing native .searchable()
+    /// Custom search bar with full hit area
+    @ViewBuilder
     private var customSearchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
@@ -225,11 +158,13 @@ struct ContentView: View {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityLabel("Clear search")
             }
         }
         .padding(10)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+        .onTapGesture { isSearchFieldFocused = true }
+        .modifier(GlassOrFillModifier(cornerRadius: .infinity))
         .padding(.horizontal)
         .padding(.top, 8)
     }
@@ -247,6 +182,7 @@ struct ContentView: View {
                             Image(systemName: "tram.fill")
                                 .foregroundStyle(.secondary)
                                 .frame(width: 24)
+                                .accessibilityHidden(true)
                             Text(site.name)
                                 .foregroundStyle(.primary)
                         }
@@ -263,10 +199,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(.systemGray6))
-            )
+            .modifier(GlassOrFillModifier(cornerRadius: 16))
             .padding(.horizontal)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -280,33 +213,37 @@ struct ContentView: View {
             if isSearchFieldFocused && !filteredStations.isEmpty {
                 searchSuggestionsView
                     .padding(.top, 8)
-            } else if !viewModel.departures.isEmpty {
-                departuresList
-                    .padding(.top, 16)
+                    .transition(.opacity)
             } else if !isSearchFieldFocused {
-                initialView
-                    .padding(.top, 32)
-                    .onTapGesture { isSearchFieldFocused = false }
+                Group {
+                    initialView
+                        .padding(.top, 32)
 
-                Spacer()
-                    .contentShape(Rectangle())
-                    .onTapGesture { isSearchFieldFocused = false }
+                    Spacer()
 
-                footerSection
+                    footerSection
+                }
+                .transition(.opacity)
             } else {
                 Spacer()
-                    .contentShape(Rectangle())
-                    .onTapGesture { isSearchFieldFocused = false }
             }
         }
-        .padding(.horizontal, 0)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation {
+                isSearchFieldFocused = false
+            }
+        }
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(reduceMotion ? .none : .default, value: isSearchFieldFocused)
         .onChange(of: stationName) { _, newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.isEmpty {
-                filteredStations = []
-            } else {
-                filteredStations = SiteStore.shared.search(query: trimmed)
+            withAnimation(reduceMotion ? .none : .default) {
+                if trimmed.isEmpty {
+                    filteredStations = []
+                } else {
+                    filteredStations = SiteStore.shared.search(query: trimmed)
+                }
             }
         }
     }
@@ -327,26 +264,24 @@ struct ContentView: View {
     private var contentSection: some View {
         VStack {
             if viewModel.isLoading {
-                // Loading state - always show when loading in search mode
                 loadingView
+                    .transition(.opacity)
             } else if let errorMessage = viewModel.errorMessage {
-                // Error state
                 errorView(message: errorMessage)
+                    .transition(.opacity)
             } else if !viewModel.departures.isEmpty {
-                // Departures list
                 departuresList
+                    .transition(.opacity)
             } else if !viewModel.currentStation.isEmpty {
-                // No departures found
                 noDeparturesView
-            } else if !isSearchMode {
-                // Initial state - only show on home screen, not in search mode
-                initialView
+                    .transition(.opacity)
             } else {
-                // Empty space in search mode when no station selected yet
                 Spacer()
             }
         }
-        .padding(.top, isSearchMode ? 16 : 32)
+        .animation(reduceMotion ? .none : .default, value: viewModel.isLoading)
+        .animation(reduceMotion ? .none : .default, value: viewModel.departures.isEmpty)
+        .padding(.top, 16)
     }
 
     /// Loading indicator with beautiful animations
@@ -362,7 +297,6 @@ struct ContentView: View {
                 .opacity(0.8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .transition(.opacity.combined(with: .scale(scale: 0.9)).animation(.easeInOut(duration: 0.3)))
     }
 
     /// Error message display
@@ -371,6 +305,7 @@ struct ContentView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
                 .foregroundStyle(.orange)
+                .accessibilityHidden(true)
 
             Text("Error")
                 .font(.headline)
@@ -394,34 +329,48 @@ struct ContentView: View {
         let modes = availableTransportModes
         if modes.count >= 2 {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    FilterPillButton(
-                        label: "All",
-                        icon: nil,
-                        color: .primary,
-                        isSelected: selectedTransportFilter == nil
-                    ) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedTransportFilter = nil
-                        }
-                    }
-
-                    ForEach(modes, id: \.self) { mode in
-                        FilterPillButton(
-                            label: transportModeName(for: mode),
-                            icon: transportModeIcon(for: mode),
-                            color: transportModeColor(for: mode),
-                            isSelected: selectedTransportFilter == mode
-                        ) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedTransportFilter = mode
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal)
+                filterPillsContent
             }
             .padding(.bottom, 8)
+        }
+    }
+
+    @ViewBuilder
+    private var filterPillsContent: some View {
+        let pills = HStack(spacing: 8) {
+            FilterPillButton(
+                label: "All",
+                icon: nil,
+                color: .primary,
+                isSelected: selectedTransportFilter == nil,
+                invertSelection: true
+            ) {
+                withAnimation {
+                    selectedTransportFilter = nil
+                }
+            }
+
+            ForEach(availableTransportModes, id: \.self) { mode in
+                FilterPillButton(
+                    label: transportModeName(for: mode),
+                    icon: transportModeIcon(for: mode),
+                    color: transportModeColor(for: mode),
+                    isSelected: selectedTransportFilter == mode
+                ) {
+                    withAnimation {
+                        selectedTransportFilter = mode
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 8) {
+                pills
+            }
+        } else {
+            pills
         }
     }
 
@@ -433,29 +382,21 @@ struct ContentView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(filteredDepartures.enumerated()), id: \.element.id) { index, departure in
+                        ForEach(filteredDepartures, id: \.id) { departure in
                             DepartureRowView(departure: departure)
                                 .padding(.horizontal)
                                 .padding(.vertical, 8)
                                 .id(departure.id)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .trailing))
-                                        .animation(.easeInOut(duration: 0.3).delay(Double(index) * 0.05)),
-                                    removal: .opacity.animation(.easeInOut(duration: 0.2))
-                                ))
-                                .modifier(ScrollFadeModifier(index: index))
 
-                            if index < filteredDepartures.count - 1 {
+                            if departure.id != filteredDepartures.last?.id {
                                 Divider()
                                     .padding(.leading)
                             }
                         }
                     }
                 }
-                .coordinateSpace(name: "scroll")
             }
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.35)))
     }
 
     /// No departures found message
@@ -464,6 +405,7 @@ struct ContentView: View {
             Image(systemName: "tram")
                 .font(.largeTitle)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
 
             Text("No departures found")
                 .font(.headline)
@@ -476,36 +418,24 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Initial state when app first loads with smooth transitions
+    /// Initial state when app first loads
     private var initialView: some View {
         Group {
             if pinnedManager.pinnedStations.isEmpty {
-                // Empty state with subtle animation
-                VStack(spacing: 24) {
-                    Image(systemName: "tram.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.blue)
-                        .scaleEffect(isEmptyStatePulsing ? 1.05 : 1.0)
-                        .animation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: isEmptyStatePulsing)
-                        .onAppear {
-                            isEmptyStatePulsing = true
-                        }
-                        .onDisappear {
-                            isEmptyStatePulsing = false
-                        }
-
+                VStack(spacing: 12) {
                     Text("Ready to roll?")
                         .font(.title2)
                         .fontWeight(.semibold)
-                        .opacity(0.8)
+                        .foregroundStyle(.primary.opacity(0.8))
+
+                    Text("Search for a station to get started")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .transition(.opacity.combined(with: .scale(scale: 0.9)).animation(.easeInOut(duration: 0.5)))
             } else {
-                // Pinned stations
                 pinnedStationsView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)).animation(.easeInOut(duration: 0.4)))
             }
         }
     }
@@ -521,36 +451,29 @@ struct ContentView: View {
             }
             .padding(.horizontal)
 
-            LazyVStack(spacing: 0) {
-                ForEach(pinnedManager.pinnedStations, id: \.id) { station in
-                    PinnedStationRow(
-                        station: station,
-                        onTap: { selectPinnedStation(station) },
-                        onUnpin: { pinnedManager.unpinStation(id: station.id) }
-                    )
-
-                    if station.id != pinnedManager.pinnedStations.last?.id {
-                        Divider()
-                            .padding(.leading, 60)
-                    }
-                }
-            }
-            .background {
-                if #available(iOS 26, *) {
-                    // Use Liquid Glass effect on iOS 26+
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(.clear)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 12))
-                } else {
-                    // Fallback for older iOS versions
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
-                }
-            }
-            .padding(.horizontal)
+            pinnedStationsListContent
+                .padding(.horizontal)
 
             Spacer()
         }
+    }
+
+    private var pinnedStationsListContent: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(pinnedManager.pinnedStations, id: \.id) { station in
+                PinnedStationRow(
+                    station: station,
+                    onTap: { selectPinnedStation(station) },
+                    onUnpin: { pinnedManager.unpinStation(id: station.id) }
+                )
+
+                if station.id != pinnedManager.pinnedStations.last?.id {
+                    Divider()
+                        .padding(.leading, 60)
+                }
+            }
+        }
+        .modifier(GlassOrFillModifier(cornerRadius: 16))
     }
 
     /// Footer section
@@ -623,16 +546,14 @@ struct ContentView: View {
         isSearchFieldFocused = false
         filteredStations = []
         selectedTransportFilter = nil
-        stationName = name
         viewModel.currentSiteID = siteID
+        stationName = name
+        isSearchMode = true
 
-        withAnimation(.easeInOut(duration: 0.35)) {
-            isSearchMode = true
-            useInlineTitle = true
-        }
-
-        Task {
+        selectStationTask?.cancel()
+        selectStationTask = Task {
             try? await Task.sleep(nanoseconds: 100_000_000)
+            guard !Task.isCancelled else { return }
             searchDepartures()
         }
     }
@@ -660,14 +581,7 @@ struct ContentView: View {
     private func resetSearch() {
         isSearchFieldFocused = false
         filteredStations = []
-        stationName = ""
-        useInlineTitle = false
-
-        withAnimation(.easeInOut(duration: 0.35)) {
-            isSearchMode = false
-            selectedTransportFilter = nil
-            viewModel.clearDepartures()
-        }
+        isSearchMode = false
     }
 
     /// Refreshes the current departures by calling the API again
@@ -682,8 +596,10 @@ struct ContentView: View {
         easterEggTapCount += 1
 
         // Reset tap count after 3 seconds if not completed
-        Task {
+        easterEggResetTask?.cancel()
+        easterEggResetTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+            guard !Task.isCancelled else { return }
             if easterEggTapCount < 3 {
                 easterEggTapCount = 0
             }
@@ -694,7 +610,7 @@ struct ContentView: View {
             easterEggTapCount = 0 // Reset for next time
 
             // Show thank you screen
-            withAnimation(.easeInOut(duration: 0.3)) {
+            withAnimation {
                 showingThankYou = true
             }
         }
@@ -752,7 +668,7 @@ struct PinnedStationRow: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onLongPressGesture(minimumDuration: 0.01, maximumDistance: .infinity, pressing: { isPressing in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation {
                 isPressed = isPressing
             }
         }, perform: {})
@@ -830,13 +746,10 @@ struct PinnedStationRow: View {
 struct DepartureRowView: View {
     let departure: Departure
 
-    @State private var isVisible = false
-
     var body: some View {
         HStack(spacing: 16) {
             // Line number and direction
             VStack(alignment: .leading, spacing: 6) {
-                // Colored line number box with subtle animation
                 Text(departure.line.designation)
                     .font(.callout.bold())
                     .foregroundStyle(.white)
@@ -844,44 +757,24 @@ struct DepartureRowView: View {
                     .background(lineColor(for: departure))
                     .clipShape(.rect(cornerRadius: 8))
                     .shadow(color: lineColor(for: departure).opacity(0.3), radius: 4, x: 0, y: 2)
-                    .scaleEffect(isVisible ? 1.0 : 0.8)
-                    .opacity(isVisible ? 1.0 : 0.0)
 
                 Text(departure.destination)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .opacity(isVisible ? 1.0 : 0.0)
             }
 
             Spacer()
 
-            // Departure time with pulse animation for urgent departures
             VStack(alignment: .trailing, spacing: 4) {
                 Text(departure.display)
                     .font(.headline)
                     .foregroundStyle(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
-                    .scaleEffect(departure.display.contains("Nu") ? (isVisible ? 1.1 : 1.0) : 1.0)
-                    .opacity(isVisible ? 1.0 : 0.0)
 
                 if let platform = departure.stopPoint.designation {
                     Text("Platform \(platform)")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
-                        .opacity(isVisible ? 1.0 : 0.0)
-                }
-            }
-        }
-        .onAppear {
-            // Snappier initial animation to work with scroll-based animations
-            withAnimation(.easeOut(duration: 0.2)) {
-                isVisible = true
-            }
-
-            // Add pulse animation for urgent departures
-            if departure.display.contains("Nu") {
-                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                    isVisible = true
                 }
             }
         }
@@ -907,6 +800,34 @@ struct DepartureRowView: View {
 
 }
 
+// MARK: - Glass or Fill Modifier
+
+/// Applies liquid glass on iOS 26+, falls back to systemGray6 fill.
+/// Pass `.infinity` for cornerRadius to get a capsule shape.
+struct GlassOrFillModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    private var isCapsule: Bool { cornerRadius == .infinity }
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            if isCapsule {
+                content.glassEffect(.regular, in: .capsule)
+            } else {
+                content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+            }
+        } else {
+            if isCapsule {
+                content
+                    .background(Capsule().fill(Color(.systemGray6)))
+            } else {
+                content
+                    .background(RoundedRectangle(cornerRadius: cornerRadius).fill(Color(.systemGray6)))
+            }
+        }
+    }
+}
+
 // MARK: - Filter Pill Button
 
 struct FilterPillButton: View {
@@ -914,27 +835,41 @@ struct FilterPillButton: View {
     let icon: String?
     let color: Color
     let isSelected: Bool
+    var invertSelection: Bool = false
     let action: () -> Void
+
+    private var pillContent: some View {
+        HStack(spacing: 4) {
+            if let icon {
+                Image(systemName: icon)
+                    .font(.caption.weight(.medium))
+            }
+            Text(label)
+                .font(.caption.weight(.medium))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .fixedSize()
+        .foregroundStyle(isSelected ? (invertSelection ? Color(.systemBackground) : color) : .primary)
+    }
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.caption.weight(.medium))
-                }
-                Text(label)
-                    .font(.caption.weight(.medium))
+            if #available(iOS 26, *) {
+                pillContent
+                    .glassEffect(
+                        isSelected ? .regular.interactive().tint(invertSelection ? Color(.label) : color) : .regular.interactive(),
+                        in: .capsule
+                    )
+            } else {
+                pillContent
+                    .background(isSelected ? (invertSelection ? Color(.label) : color.opacity(0.15)) : Color(.systemGray6))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(isSelected ? (invertSelection ? Color.clear : color.opacity(0.3)) : Color.clear, lineWidth: 1)
+                    )
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(isSelected ? color.opacity(0.15) : Color(.systemGray6))
-            .foregroundStyle(isSelected ? color : .secondary)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(isSelected ? color.opacity(0.3) : Color.clear, lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
     }
@@ -1042,7 +977,7 @@ struct ThankYouView: View {
 
                     // Simple close text
                     Button("Close") {
-                        withAnimation(.easeInOut(duration: 0.3)) {
+                        withAnimation {
                             isVisible = false
                         }
                     }
@@ -1050,103 +985,13 @@ struct ThankYouView: View {
                 }
                 .padding(.vertical, 80)
             }
-            .overlay(ConfettiView().allowsHitTesting(false).ignoresSafeArea())
+            .overlay {
+                if !UIAccessibility.isReduceMotionEnabled {
+                    ConfettiView().allowsHitTesting(false).ignoresSafeArea()
+                }
+            }
             .transition(.opacity)
         }
     }
 }
 
-// MARK: - Scroll Fade Modifier
-
-/// A custom modifier that applies beautiful fade animations based on scroll position
-/// This creates the same fade effect when scrolling up as when scrolling down
-///
-/// How it works:
-/// 1. Tracks scroll position using GeometryReader and preference keys
-/// 2. Determines scroll direction by comparing current vs previous scroll offset
-/// 3. Applies fade-in animations when items come into view (both up and down scrolling)
-/// 4. Uses staggered delays for a beautiful cascading effect
-struct ScrollFadeModifier: ViewModifier {
-    let index: Int
-
-    @State private var isVisible = false
-    @State private var scrollOffset: CGFloat = 0
-    @State private var lastScrollOffset: CGFloat = 0
-    @State private var scrollDirection: ScrollDirection = .none
-
-    // Animation timing for smooth fade effects - optimized for snappier response
-    private let fadeInDuration: Double = 0.2
-    private let fadeOutDuration: Double = 0.15
-    private let staggerDelay: Double = 0.01
-
-    enum ScrollDirection {
-        case up, down, none
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isVisible ? 1.0 : 0.0)
-            .scaleEffect(isVisible ? 1.0 : 0.98)
-            .offset(y: isVisible ? 0 : (scrollDirection == .up ? 5 : -5))
-            .animation(
-                .easeOut(duration: isVisible ? fadeInDuration : fadeOutDuration)
-                .delay(Double(index) * staggerDelay),
-                value: isVisible
-            )
-            .onAppear {
-                // Initial fade in with minimal delay for snappier response
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(Double(index) * staggerDelay * 1_000_000_000))
-                    withAnimation(.easeOut(duration: fadeInDuration)) {
-                        isVisible = true
-                    }
-                }
-            }
-            .onDisappear {
-                // Fade out when disappearing
-                withAnimation(.easeOut(duration: fadeOutDuration)) {
-                    isVisible = false
-                }
-            }
-            // Add scroll detection using GeometryReader
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scroll")).minY)
-                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-                            scrollOffset = value
-
-                            // Determine scroll direction with much lower threshold for snappier response
-                            if abs(scrollOffset - lastScrollOffset) > 2 { // Reduced threshold for immediate response
-                                scrollDirection = scrollOffset > lastScrollOffset ? .up : .down
-
-                                // Apply fade animation based on scroll direction - immediate response
-                                if scrollDirection == .up {
-                                    // Fade in when scrolling up (items coming into view from bottom)
-                                    withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
-                                        isVisible = true
-                                    }
-                                } else if scrollDirection == .down {
-                                    // Fade in when scrolling down (items coming into view from top)
-                                    withAnimation(.easeOut(duration: fadeInDuration).delay(Double(index) * staggerDelay)) {
-                                        isVisible = true
-                                    }
-                                }
-                            }
-
-                            lastScrollOffset = scrollOffset
-                        }
-                }
-            )
-    }
-}
-
-// MARK: - Scroll Offset Preference Key
-
-/// Preference key for tracking scroll offset
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}

@@ -265,31 +265,38 @@ struct SLTrackerWidgetEntryView: View {
         return .blue
     }
 
-    /// Converts a date to a time string for display (respects user's time format preference)
+    // MARK: - Static Formatters
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .short
+        f.dateStyle = .none
+        f.locale = Locale.current
+        return f
+    }()
+
+    private static let apiDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "Europe/Stockholm")
+        return f
+    }()
+
+    private static let displayTimeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.timeZone = TimeZone(identifier: "Europe/Stockholm")
+        return f
+    }()
+
     private func timeString(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        formatter.dateStyle = .none
-        // Use current locale to respect user's 12/24 hour preference
-        formatter.locale = Locale.current
-        let timeString = formatter.string(from: date)
-        return timeString
+        Self.timeFormatter.string(from: date)
     }
-    
-    /// Formats departure time from API string to display time (e.g., "13:32")
+
     private func formatDepartureTime(_ timeString: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
-        formatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
-        
-        if let date = formatter.date(from: timeString) {
-            let displayFormatter = DateFormatter()
-            displayFormatter.dateFormat = "HH:mm"
-            displayFormatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
-            return displayFormatter.string(from: date)
+        if let date = Self.apiDateFormatter.date(from: timeString) {
+            return Self.displayTimeFormatter.string(from: date)
         }
-        
-        // Fallback to original display if parsing fails
         return timeString
     }
 }
@@ -319,35 +326,12 @@ struct SLTrackerWidgetProvider: TimelineProvider {
     /// Provides timeline entries for the widget
     func getTimeline(in context: Context, completion: @escaping (Timeline<SLTrackerWidgetEntry>) -> Void) {
         Task {
-            // Fetch current data
             let entry = await fetchWidgetData()
-            
-            // Create a more aggressive update strategy
-            var entries: [SLTrackerWidgetEntry] = [entry]
-            
-            // Create multiple future entries with shorter intervals
-            // This helps iOS understand we want frequent updates
-            let currentDate = Date()
-            
-            // Add entries for the next 5 minutes with 30-second intervals
-            for i in 1...10 {
-                if let futureDate = Calendar.current.date(byAdding: .second, value: i * 30, to: currentDate) {
-                    // Create a placeholder entry that will be refreshed
-                    let futureEntry = SLTrackerWidgetEntry(
-                        date: futureDate,
-                        stationName: entry.stationName,
-                        departures: entry.departures,
-                        errorMessage: entry.errorMessage
-                    )
-                    entries.append(futureEntry)
-                }
-            }
-            
-            // Use a very aggressive update policy for real-time feel
-            // Request updates every 30 seconds, but iOS may not honor this
-            let nextUpdate = Calendar.current.date(byAdding: .second, value: 30, to: currentDate) ?? currentDate
-            
-            let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
+
+            // Request next update in 5 minutes — iOS controls actual frequency.
+            // The app also calls WidgetCenter.shared.reloadAllTimelines() on data changes.
+            let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date()) ?? Date()
+            let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
             completion(timeline)
         }
     }
@@ -389,12 +373,29 @@ struct SLTrackerWidgetProvider: TimelineProvider {
             return entry
         }
         
-        // Fetch departures for the first station
+        // Fetch departures for the first station and all related sub-stations
         do {
             let apiManager = APIManager.shared
-            let allDepartures = try await apiManager.fetchDepartures(for: firstStation.id)
-            // Sort by expected time (ISO 8601 strings sort chronologically)
-            let departures = allDepartures.sorted { $0.expected < $1.expected }
+            let idsToFetch = firstStation.relatedSiteIDs.isEmpty ? [firstStation.id] : firstStation.relatedSiteIDs
+
+            let allDepartures = try await withThrowingTaskGroup(of: [Departure].self) { group in
+                for id in idsToFetch {
+                    group.addTask {
+                        try await apiManager.fetchDepartures(for: id)
+                    }
+                }
+                var merged: [Departure] = []
+                for try await batch in group {
+                    merged.append(contentsOf: batch)
+                }
+                return merged
+            }
+
+            // Deduplicate by journey ID and sort by expected time
+            var seenJourneys = Set<Int>()
+            let departures = allDepartures
+                .filter { seenJourneys.insert($0.journey.id).inserted }
+                .sorted { $0.expected < $1.expected }
 
             let entry = SLTrackerWidgetEntry(
                 date: Date(),

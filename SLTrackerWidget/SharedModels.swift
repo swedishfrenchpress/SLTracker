@@ -157,12 +157,14 @@ struct PinnedStation: Codable, Identifiable, Equatable {
     let name: String
     let pinnedAt: Date
     var transportModes: [String]
+    var relatedSiteIDs: [String]
 
-    init(id: String, name: String, transportModes: [String] = ["METRO"]) {
+    init(id: String, name: String, transportModes: [String] = ["METRO"], relatedSiteIDs: [String] = []) {
         self.id = id
         self.name = name
         self.pinnedAt = Date()
         self.transportModes = transportModes
+        self.relatedSiteIDs = relatedSiteIDs
     }
 
     init(from decoder: Decoder) throws {
@@ -171,13 +173,15 @@ struct PinnedStation: Codable, Identifiable, Equatable {
         name = try container.decode(String.self, forKey: .name)
         pinnedAt = try container.decode(Date.self, forKey: .pinnedAt)
         transportModes = try container.decodeIfPresent([String].self, forKey: .transportModes) ?? ["METRO"]
+        relatedSiteIDs = try container.decodeIfPresent([String].self, forKey: .relatedSiteIDs) ?? []
     }
 }
 
 /// Manager for handling pinned stations with persistence
 @MainActor
-class PinnedStationsManager: ObservableObject {
-    @Published var pinnedStations: [PinnedStation] = []
+@Observable
+final class PinnedStationsManager {
+    var pinnedStations: [PinnedStation] = []
     
     private let maxPinnedStations = 8
     private let storageKey = "pinnedStations"
@@ -267,7 +271,7 @@ class PinnedStationsManager: ObservableObject {
 // MARK: - API Manager (Shared between app and widget)
 
 /// Manages all API calls to the Stockholm Transport API
-class APIManager {
+final class APIManager {
     
     /// Shared singleton instance
     static let shared = APIManager()
@@ -277,9 +281,6 @@ class APIManager {
     /// The base URL for the SL Transport API
     private let baseURL = "https://transport.integration.sl.se/v1"
     
-    /// Your API key for accessing the SL Transport API
-    /// Note: You'll need to get this from https://www.trafiklab.se/
-    private let apiKey = "b890520205904723b2fd61a42c46b332"
 
     /// Fetches all departures for a specific site
     func fetchDepartures(for siteID: String) async throws -> [Departure] {
