@@ -7,6 +7,12 @@
 
 import Foundation
 
+// NOTE: The Codable models below are a hand-maintained copy of the app's
+// sltracker/SharedModels.swift and MUST stay byte-identical to it — the widget
+// decodes pinned-station and departure data the app wrote to the App Group. Only
+// the shared wire models + APIManager belong here; the app owns PinnedStationsManager
+// (the widget reads pinned stations straight from UserDefaults in fetchWidgetData).
+
 // MARK: - API Response Models (Shared between app and widget)
 
 /// The main response structure from the SL Transport API
@@ -174,97 +180,6 @@ struct PinnedStation: Codable, Identifiable, Equatable {
         pinnedAt = try container.decode(Date.self, forKey: .pinnedAt)
         transportModes = try container.decodeIfPresent([String].self, forKey: .transportModes) ?? ["METRO"]
         relatedSiteIDs = try container.decodeIfPresent([String].self, forKey: .relatedSiteIDs) ?? []
-    }
-}
-
-/// Manager for handling pinned stations with persistence
-@MainActor
-@Observable
-final class PinnedStationsManager {
-    var pinnedStations: [PinnedStation] = []
-    
-    private let maxPinnedStations = 8
-    private let storageKey = "pinnedStations"
-    
-    // Use App Groups to share data between app and widget
-    private var userDefaults: UserDefaults {
-        // Try to use App Group first, fallback to standard UserDefaults
-        if let groupDefaults = UserDefaults(suiteName: "group.com.erik.sltracker") {
-            return groupDefaults
-        }
-        return UserDefaults.standard
-    }
-    
-    init() {
-        loadPinnedStations()
-    }
-    
-    /// Load pinned stations from UserDefaults
-    private func loadPinnedStations() {
-        if let data = userDefaults.data(forKey: storageKey),
-           let stations = try? JSONDecoder().decode([PinnedStation].self, from: data) {
-            pinnedStations = stations.sorted { $0.pinnedAt > $1.pinnedAt }
-        }
-    }
-    
-    /// Save pinned stations to UserDefaults
-    private func savePinnedStations() {
-        if let data = try? JSONEncoder().encode(pinnedStations) {
-            userDefaults.set(data, forKey: storageKey)
-        }
-    }
-    
-    /// Check if a station is pinned
-    func isStationPinned(id: String) -> Bool {
-        pinnedStations.contains { $0.id == id }
-    }
-    
-    /// Pin a station
-    func pinStation(id: String, name: String) {
-        print("📌 PinnedStationsManager: Attempting to pin station '\(name)' (ID: \(id))")
-        
-        // Don't pin if already pinned
-        guard !isStationPinned(id: id) else { 
-            print("⚠️ PinnedStationsManager: Station '\(name)' is already pinned")
-            return 
-        }
-        
-        let newStation = PinnedStation(id: id, name: name)
-        pinnedStations.insert(newStation, at: 0)
-        
-        // Remove oldest if over limit
-        if pinnedStations.count > maxPinnedStations {
-            pinnedStations.removeLast()
-        }
-        
-        print("✅ PinnedStationsManager: Successfully pinned '\(name)'. Total stations: \(pinnedStations.count)")
-        savePinnedStations()
-    }
-    
-    /// Unpin a station
-    func unpinStation(id: String) {
-        print("📌 PinnedStationsManager: Attempting to unpin station with ID: \(id)")
-        
-        let beforeCount = pinnedStations.count
-        pinnedStations.removeAll { $0.id == id }
-        let afterCount = pinnedStations.count
-        
-        if beforeCount != afterCount {
-            print("✅ PinnedStationsManager: Successfully unpinned station. Stations: \(beforeCount) → \(afterCount)")
-        } else {
-            print("⚠️ PinnedStationsManager: Station with ID \(id) was not found to unpin")
-        }
-        
-        savePinnedStations()
-    }
-    
-    /// Toggle pin status
-    func togglePin(id: String, name: String) {
-        if isStationPinned(id: id) {
-            unpinStation(id: id)
-        } else {
-            pinStation(id: id, name: name)
-        }
     }
 }
 

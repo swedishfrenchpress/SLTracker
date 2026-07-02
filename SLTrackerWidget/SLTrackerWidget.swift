@@ -24,6 +24,17 @@ struct SLTrackerWidgetEntry: TimelineEntry, Codable {
         self.errorMessage = errorMessage
         self.lastUpdated = Date()
     }
+
+    /// Derives an entry at a new timeline `date` while preserving the original
+    /// `lastUpdated` — used to fan one fetch into several boundary entries and to
+    /// keep the true "updated" time when serving stale data after a failure.
+    init(date: Date, stationName: String?, departures: [Departure]?, errorMessage: String?, lastUpdated: Date) {
+        self.date = date
+        self.stationName = stationName
+        self.departures = departures
+        self.errorMessage = errorMessage
+        self.lastUpdated = lastUpdated
+    }
 }
 
 extension SLTrackerWidgetEntry {
@@ -61,7 +72,18 @@ extension SLTrackerWidgetEntry {
 /// The main widget view that displays departures for the first pinned station
 struct SLTrackerWidgetEntryView: View {
     var entry: SLTrackerWidgetEntry
-    
+
+    /// Departures still in the future relative to this entry's date. Because the
+    /// timeline carries one entry per departure boundary, trains that have already
+    /// left drop off as the clock advances — without waiting for a network reload.
+    private var upcomingDepartures: [Departure]? {
+        guard let departures = entry.departures else { return nil }
+        // Strict `>` so a train drops off exactly at its departure time and the next
+        // fetched departure slides up into view, rather than lingering until the
+        // following train's boundary.
+        return departures.filter { widgetParseDate($0.expected) > entry.date }
+    }
+
     var body: some View {
         ZStack {
             // Use the modern containerBackground API for iOS 17+
@@ -74,8 +96,8 @@ struct SLTrackerWidgetEntryView: View {
                 Color(.systemBackground)
             }
             
-            if let departures = entry.departures, !departures.isEmpty, let stationName = entry.stationName {
-                // Show departures
+            if let departures = upcomingDepartures, !departures.isEmpty, let stationName = entry.stationName {
+                // Show departures still ahead of this entry's moment
                 departuresView(departures: departures, stationName: stationName)
             } else if let stationName = entry.stationName {
                 // Station exists but no departures
@@ -145,18 +167,20 @@ struct SLTrackerWidgetEntryView: View {
             Text(departure.line.designation)
                 .font(.caption.bold())
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
                 .frame(width: 24, height: 20)
                 .background(lineColor(for: departure))
                 .clipShape(.rect(cornerRadius: 4))
-            
+
             // Destination
             Text(departure.destination)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-            
+
             Spacer()
-            
+
             // Time - show actual time instead of relative time
             Text(formatDepartureTime(departure.expected))
                 .font(.caption.bold())
@@ -164,6 +188,8 @@ struct SLTrackerWidgetEntryView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Line \(departure.line.designation) to \(departure.destination), departs \(formatDepartureTime(departure.expected))")
     }
     
     /// View when no departures are found
@@ -342,7 +368,10 @@ private let widgetAPIDateFormatter: DateFormatter = {
 }()
 
 private func widgetParseDate(_ dateString: String) -> Date {
-    widgetAPIDateFormatter.date(from: dateString) ?? Date()
+    // Unparseable times sort to the past so a malformed departure is dropped by the
+    // `>= now` / `>= entry.date` filters, rather than shown with a garbage clock
+    // value or jumping to the front as if imminent.
+    widgetAPIDateFormatter.date(from: dateString) ?? .distantPast
 }
 
 /// The widget provider that supplies timeline entries
@@ -370,13 +399,44 @@ struct SLTrackerWidgetProvider: TimelineProvider {
     /// Provides timeline entries for the widget
     func getTimeline(in context: Context, completion: @escaping (Timeline<SLTrackerWidgetEntry>) -> Void) {
         Task {
-            let entry = await fetchWidgetData()
+            let base = await fetchWidgetData()
 
-            // Request next update in 5 minutes — iOS controls actual frequency.
-            // The app also calls WidgetCenter.shared.reloadAllTimelines() on data changes.
-            let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date()) ?? Date()
-            let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+            // Fan the single fetch into one entry per upcoming departure boundary so
+            // a train drops off exactly when it leaves — even before iOS grants the
+            // next network reload.
+            let entries = timelineEntries(from: base)
+
+            // Request a data refresh in ~15 min; iOS throttles the real cadence.
+            // The app also calls WidgetCenter.shared.reloadAllTimelines() on changes.
+            let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date()
+            let timeline = Timeline(entries: entries, policy: .after(nextUpdate))
             completion(timeline)
+        }
+    }
+
+    /// Builds timeline entries at each upcoming departure boundary (capped) so the
+    /// view can re-filter departed trains as the clock advances, without a reload.
+    /// Preserves the base entry's `lastUpdated` so the "updated" time stays truthful.
+    private func timelineEntries(from base: SLTrackerWidgetEntry) -> [SLTrackerWidgetEntry] {
+        guard let departures = base.departures, !departures.isEmpty else {
+            return [base]
+        }
+        let now = Date()
+        var boundaries: [Date] = [now]
+        for departure in departures {
+            let time = widgetParseDate(departure.expected)
+            if time > now, time != boundaries.last {
+                boundaries.append(time)
+            }
+        }
+        return boundaries.prefix(30).map { boundary in
+            SLTrackerWidgetEntry(
+                date: boundary,
+                stationName: base.stationName,
+                departures: base.departures,
+                errorMessage: base.errorMessage,
+                lastUpdated: base.lastUpdated
+            )
         }
     }
     
@@ -459,14 +519,20 @@ struct SLTrackerWidgetProvider: TimelineProvider {
             return entry
             
         } catch {
-            let entry = SLTrackerWidgetEntry(
+            // Don't let one network blip wipe the widget: keep serving the last good
+            // departures (their original "updated" time stays as a staleness cue) and
+            // do NOT overwrite the good cache with this failure.
+            if let cachedData = sharedDefaults.data(forKey: "widgetCachedData"),
+               let cachedEntry = try? JSONDecoder().decode(SLTrackerWidgetEntry.self, from: cachedData),
+               let cachedDepartures = cachedEntry.departures, !cachedDepartures.isEmpty {
+                return cachedEntry
+            }
+            return SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: firstStation.name,
                 departures: nil,
                 errorMessage: "Error loading departures"
             )
-            cacheWidgetData(entry)
-            return entry
         }
     }
     
