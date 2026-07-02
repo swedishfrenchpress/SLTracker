@@ -575,8 +575,8 @@ struct ContentView: View {
 
     private func transportModeIcon(for mode: String) -> String {
         switch mode {
-        case "METRO": return "tram.fill"
-        case "TRAM": return "cablecar"
+        case "METRO": return "tram.tunnel.fill"
+        case "TRAM": return "tram.fill"
         case "BUS": return "bus.fill"
         case "TRAIN": return "train.side.front.car"
         case "SHIP": return "ferry.fill"
@@ -759,21 +759,21 @@ struct PinnedStationRow: View {
 
     private var stationIcon: String {
         let modes = station.transportModes
-        if modes.contains("METRO") || modes.isEmpty { return "tram.fill" }
+        if modes.contains("METRO") || modes.isEmpty { return "tram.tunnel.fill" }
         if modes.count == 1, let mode = modes.first {
             switch mode {
-            case "TRAM": return "cablecar"
+            case "TRAM": return "tram.fill"
             case "BUS": return "bus.fill"
             case "TRAIN": return "train.side.front.car"
             case "SHIP": return "ferry.fill"
-            default: return "tram.fill"
+            default: return "tram.tunnel.fill"
             }
         }
         let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
         for mode in priority {
             if modes.contains(mode) {
                 switch mode {
-                case "TRAM": return "cablecar"
+                case "TRAM": return "tram.fill"
                 case "BUS": return "bus.fill"
                 case "TRAIN": return "train.side.front.car"
                 case "SHIP": return "ferry.fill"
@@ -781,7 +781,7 @@ struct PinnedStationRow: View {
                 }
             }
         }
-        return "tram.fill"
+        return "tram.tunnel.fill"
     }
 
     private var stationIconColor: Color {
