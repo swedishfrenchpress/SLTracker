@@ -442,10 +442,19 @@ struct SLTrackerWidgetProvider: TimelineProvider {
                 .filter { seenJourneys.insert($0.journey.id).inserted }
                 .sorted { widgetParseDate($0.expected) < widgetParseDate($1.expected) }
 
+            // Apply the user's widget transit-mode filter (nil/empty = show all)
+            let enabledModes = sharedDefaults.stringArray(forKey: "widgetTransportModes")
+            let visibleDepartures: [Departure]
+            if let enabledModes, !enabledModes.isEmpty {
+                visibleDepartures = departures.filter { enabledModes.contains($0.line.transportMode) }
+            } else {
+                visibleDepartures = departures
+            }
+
             let entry = SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: firstStation.name,
-                departures: departures,
+                departures: visibleDepartures,
                 errorMessage: nil
             )
             

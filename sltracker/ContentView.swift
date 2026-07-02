@@ -17,6 +17,12 @@ struct ContentView: View {
     /// The pinned stations manager
     @State private var pinnedManager = PinnedStationsManager()
 
+    /// Widget-level settings (transit-mode filter)
+    @State private var settings = WidgetSettingsManager()
+
+    /// Whether the settings sheet is presented
+    @State private var showingSettings = false
+
     /// Navigation state for deep linking
     @Environment(NavigationState.self) private var navigationState
 
@@ -78,6 +84,21 @@ struct ContentView: View {
             }
             .navigationTitle("SL Tracker")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body.weight(.medium))
+                    }
+                    .tint(.primary)
+                    .accessibilityLabel("Settings")
+                }
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView(settings: settings)
+            }
             .navigationDestination(isPresented: $isSearchMode) {
                 searchResultsView
                     .navigationTitle(stationName)
@@ -975,48 +996,181 @@ struct ConfettiView: UIViewRepresentable {
     }
 }
 
+/// A cursive word that "writes itself on" via a feathered leading→trailing reveal,
+/// using a preinstalled iOS cursive font (no bundled files). Respects Reduce Motion.
+/// The reveal is driven by a single animatable scalar (`scaleEffect`) rather than
+/// animating gradient stops, which SwiftUI does not interpolate.
+struct HandwritingText: View {
+    let text: String
+    var fontName: String = "SnellRoundhand-Bold"
+    var size: CGFloat = 46
+    var angle: Double = -5
+    /// Pass `!reduceMotion` — when false, the word is drawn fully, immediately.
+    let animates: Bool
+    /// Optional iOS 26-style specular sheen that rides the pen edge. Pass `!reduceMotion`.
+    var showSheen: Bool = false
+
+    // 0 = nothing shown, 1.2 = fully written (overshoot clears the trailing feather).
+    @State private var reveal: CGFloat
+
+    init(text: String, fontName: String = "SnellRoundhand-Bold", size: CGFloat = 46,
+         angle: Double = -5, animates: Bool, showSheen: Bool = false) {
+        self.text = text
+        self.fontName = fontName
+        self.size = size
+        self.angle = angle
+        self.animates = animates
+        self.showSheen = showSheen
+        // Initialise per Reduce Motion so there is no flash of hidden text on first frame.
+        _reveal = State(initialValue: animates ? 0.001 : 1.2)
+    }
+
+    private var cursiveFont: Font { .custom(fontName, size: size, relativeTo: .largeTitle) }
+
+    /// The word laid out with headroom for cursive flourishes (used by both the
+    /// visible text and the sheen mask so their frames match exactly).
+    private var wordShape: some View {
+        Text(text)
+            .font(cursiveFont)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+    }
+
+    var body: some View {
+        wordShape
+            .foregroundStyle(.primary)
+            .mask(alignment: .leading) {                         // mask FIRST…
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0.00),
+                        .init(color: .black, location: 0.85),
+                        .init(color: .clear, location: 1.00)     // mask keys on alpha
+                    ],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                .scaleEffect(x: reveal, y: 1, anchor: .leading)  // animatable scalar → smooth
+            }
+            .overlay {                                           // optional sheen, co-revealed
+                if showSheen {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.0), location: 0.72),
+                            .init(color: .white.opacity(0.55), location: 0.85),  // spike at edge
+                            .init(color: .white.opacity(0.0), location: 1.00)
+                        ],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                    .scaleEffect(x: reveal, y: 1, anchor: .leading)
+                    .blendMode(.screen)
+                    .mask { wordShape }
+                    .allowsHitTesting(false)
+                }
+            }
+            .rotationEffect(.degrees(angle))                     // …rotate AFTER, so wipe tilts too
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)  // rotated script overflows at AX5
+            .accessibilityLabel(text)
+            .onAppear {
+                guard animates else { return }                   // static case set in init
+                // async guarantees the initial frame commits before the animation begins.
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 1.1)) { reveal = 1.2 }
+                }
+            }
+    }
+}
+
 /// Thank you screen with dedication message
 struct ThankYouView: View {
     @Binding var isVisible: Bool
 
     var body: some View {
         if isVisible {
-            ZStack {
-                // Clean background
-                Color(.systemBackground)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 40) {
-                    Spacer()
-
-                    VStack(spacing: 8) {
-                        Text("Dedicated to my friend Adam.")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                        Text("Thank you for testing this app early and helping me build it.")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    // Simple close text
-                    Button("Close") {
-                        withAnimation(UIAccessibility.isReduceMotionEnabled ? .none : .default) {
-                            isVisible = false
-                        }
-                    }
-                    .tint(.primary)
-                }
-                .padding(.vertical, 80)
-            }
-            .overlay {
-                if !UIAccessibility.isReduceMotionEnabled {
-                    ConfettiView().allowsHitTesting(false).ignoresSafeArea()
-                }
-            }
-            .transition(.opacity)
+            // Extracted into a child so its @State re-initialises on every present,
+            // replaying the write-on each time the easter egg opens.
+            DedicationContent(isVisible: $isVisible)
+                .transition(.opacity)
         }
+    }
+}
+
+/// The dedication content: cursive header writes on, then the message staggers in.
+private struct DedicationContent: View {
+    @Binding var isVisible: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var showPrimary = false
+    @State private var showSecondary = false
+    @State private var showButton = false
+
+    var body: some View {
+        ZStack {
+            // Clean background
+            Color(.systemBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 28) {
+                Spacer()
+
+                // Cursive centerpiece writes itself on at a slight angle.
+                HandwritingText(text: "Dedicated",
+                                animates: !reduceMotion,
+                                showSheen: !reduceMotion)
+
+                VStack(spacing: 12) {
+                    Text("to my friend Adam.")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                        .opacity(showPrimary ? 1 : 0)
+                        .offset(y: showPrimary || reduceMotion ? 0 : 10)
+
+                    Text("Thank you for testing this app early and helping me build it.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                        .frame(maxWidth: 300)
+                        .opacity(showSecondary ? 1 : 0)
+                        .offset(y: showSecondary || reduceMotion ? 0 : 10)
+                }
+                .accessibilityElement(children: .combine)
+
+                Spacer()
+
+                // Simple close text
+                Button("Close") {
+                    withAnimation(reduceMotion ? .none : .default) {
+                        isVisible = false
+                    }
+                }
+                .tint(.primary)
+                .opacity(showButton ? 1 : 0)
+            }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 72)
+            .frame(maxWidth: .infinity)
+        }
+        .overlay {
+            if !reduceMotion {
+                ConfettiView().allowsHitTesting(false).ignoresSafeArea()
+            }
+        }
+        .onAppear(perform: runEntrance)
+    }
+
+    private func runEntrance() {
+        guard !reduceMotion else {
+            showPrimary = true
+            showSecondary = true
+            showButton = true
+            return
+        }
+        // Handwriting runs ~1.1s inside HandwritingText; stagger the rest after it.
+        withAnimation(.easeOut(duration: 0.5).delay(1.05)) { showPrimary = true }
+        withAnimation(.easeOut(duration: 0.5).delay(1.30)) { showSecondary = true }
+        withAnimation(.easeOut(duration: 0.4).delay(1.60)) { showButton = true }
     }
 }
 
