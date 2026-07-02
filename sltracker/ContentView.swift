@@ -88,6 +88,7 @@ struct ContentView: View {
                                 Button(action: {
                                     let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
                                     let relatedIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
+                                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                                     pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes, relatedSiteIDs: relatedIDs)
                                 }) {
                                     Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
@@ -101,8 +102,9 @@ struct ContentView: View {
                                 Button(action: refreshDepartures) {
                                     Image(systemName: "arrow.clockwise")
                                         .font(.body.weight(.medium))
-                                        .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
-                                        .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                                        // Continuous system rotate while loading — stops cleanly
+                                        // instead of the old hand-driven angle settling backward.
+                                        .symbolEffect(.rotate, options: .repeating, isActive: viewModel.isLoading && !reduceMotion)
                                 }
                                 .tint(.primary)
                                 .accessibilityLabel("Refresh departures")
@@ -214,7 +216,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableRowStyle())
 
                     if site.id != filteredStations.prefix(8).last?.id {
                         Divider()
@@ -272,20 +274,21 @@ struct ContentView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation(reduceMotion ? .none : .default) {
+            withAnimation(reduceMotion ? .none : .snappy) {
                 isSearchFieldFocused = false
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .animation(reduceMotion ? .none : .default, value: isSearchFieldFocused)
+        .animation(reduceMotion ? .none : .snappy, value: isSearchFieldFocused)
         .onChange(of: stationName) { _, newValue in
+            // Update results instantly on each keystroke — this is a keyboard-initiated,
+            // high-frequency action, so it must not animate (speed is the feature). The
+            // container's appear/disappear is still animated via `isSearchFieldFocused`.
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            withAnimation(reduceMotion ? .none : .default) {
-                if trimmed.isEmpty {
-                    filteredStations = []
-                } else {
-                    filteredStations = SiteStore.shared.search(query: trimmed)
-                }
+            if trimmed.isEmpty {
+                filteredStations = []
+            } else {
+                filteredStations = SiteStore.shared.search(query: trimmed)
             }
         }
     }
@@ -328,9 +331,9 @@ struct ContentView: View {
                 Spacer()
             }
         }
-        .animation(reduceMotion ? .none : .default, value: viewModel.isLoading)
-        .animation(reduceMotion ? .none : .default, value: viewModel.departures.isEmpty)
-        .animation(reduceMotion ? .none : .default, value: viewModel.errorMessage)
+        .animation(reduceMotion ? .none : .snappy, value: viewModel.isLoading)
+        .animation(reduceMotion ? .none : .snappy, value: viewModel.departures.isEmpty)
+        .animation(reduceMotion ? .none : .snappy, value: viewModel.errorMessage)
         .padding(.top, 16)
     }
 
@@ -426,7 +429,7 @@ struct ContentView: View {
                 isSelected: selectedTransportFilter == nil,
                 invertSelection: true
             ) {
-                withAnimation(reduceMotion ? .none : .default) {
+                withAnimation(reduceMotion ? .none : .snappy) {
                     selectedTransportFilter = nil
                 }
             }
@@ -439,7 +442,7 @@ struct ContentView: View {
                     color: transportMode.tint,
                     isSelected: selectedTransportFilter == mode
                 ) {
-                    withAnimation(reduceMotion ? .none : .default) {
+                    withAnimation(reduceMotion ? .none : .snappy) {
                         selectedTransportFilter = mode
                     }
                 }
@@ -467,6 +470,9 @@ struct ContentView: View {
                         DepartureRowView(departure: departure)
                             .padding(.horizontal)
                             .padding(.vertical, 8)
+                            // Fade rows in/out when the transport filter changes,
+                            // instead of popping. Gated for Reduce Motion.
+                            .transition(reduceMotion ? .identity : .opacity)
 
                         if departure.id != filteredDepartures.last?.id {
                             Divider()
@@ -634,6 +640,7 @@ struct ContentView: View {
     private func refreshDepartures() {
         selectedTransportFilter = nil
         guard !viewModel.currentSiteID.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: viewModel.currentStation)
     }
 
@@ -673,11 +680,6 @@ struct PinnedStationRow: View {
     let onTap: () -> Void
     let onUnpin: () -> Void
 
-    @State private var isPressed = false
-
-    /// Accessibility: reduce or disable animations for motion-sensitive users
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
         Button(action: {
             // Add haptic feedback
@@ -693,7 +695,6 @@ struct PinnedStationRow: View {
                     .frame(width: 28, height: 28)
                     .background(Color(.systemGray5))
                     .clipShape(.rect(cornerRadius: 6))
-                    .scaleEffect(isPressed ? 0.95 : 1.0)
 
                 // Station name
                 Text(station.name)
@@ -711,15 +712,8 @@ struct PinnedStationRow: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .opacity(isPressed ? 0.8 : 1.0)
         }
-        .buttonStyle(PlainButtonStyle())
-        .onLongPressGesture(minimumDuration: 0.01, maximumDistance: .infinity, pressing: { isPressing in
-            withAnimation(reduceMotion ? .none : .default) {
-                isPressed = isPressing
-            }
-        }, perform: {})
+        .buttonStyle(PressableRowStyle())
         .swipeActions(edge: .trailing) {
             Button("Unpin") {
                 onUnpin()
@@ -744,6 +738,9 @@ struct PinnedStationRow: View {
 /// A single row view for displaying a metro departure with enhanced animations
 struct DepartureRowView: View {
     let departure: Departure
+
+    /// Accessibility: reduce or disable animations for motion-sensitive users
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let badgeColor = slLineBadgeColor(mode: departure.line.transportMode, designation: departure.line.designation)
@@ -774,6 +771,10 @@ struct DepartureRowView: View {
                 Text(departure.display)
                     .font(.headline)
                     .foregroundStyle(imminent ? .orange : .slAccent)
+                    // Roll the digits when a refresh changes the countdown (e.g. "4 min"
+                    // → "3 min"), now that rows keep a stable identity across fetches.
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .snappy, value: departure.display)
 
                 if let platform = departure.stopPoint.designation {
                     Text("Platform \(platform)")
@@ -828,6 +829,22 @@ struct GlassOrFillModifier: ViewModifier {
     }
 }
 
+// MARK: - Pressable Row Style
+
+/// Shared press feedback for tappable rows/pills: a subtle scale-down + dim while
+/// pressed, matching the pinned-row interaction. Reduce-Motion gated, and reused so
+/// every tappable row feels the same. Replaces ad-hoc long-press gestures.
+struct PressableRowStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Filter Pill Button
 
 struct FilterPillButton: View {
@@ -854,24 +871,31 @@ struct FilterPillButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Group {
             if #available(iOS 26, *) {
-                pillContent
-                    .glassEffect(
-                        isSelected ? .regular.interactive().tint(invertSelection ? Color(.label) : color) : .regular.interactive(),
-                        in: .capsule
-                    )
+                // Glass `.interactive()` already supplies its own press feedback.
+                Button(action: action) {
+                    pillContent
+                        .glassEffect(
+                            isSelected ? .regular.interactive().tint(invertSelection ? Color(.label) : color) : .regular.interactive(),
+                            in: .capsule
+                        )
+                }
+                .buttonStyle(.plain)
             } else {
-                pillContent
-                    .background(isSelected ? (invertSelection ? Color(.label) : color.opacity(0.15)) : Color(.systemGray6))
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(isSelected ? (invertSelection ? Color.clear : color.opacity(0.3)) : Color.clear, lineWidth: 1)
-                    )
+                // Fallback has no built-in press feedback — add the shared row style.
+                Button(action: action) {
+                    pillContent
+                        .background(isSelected ? (invertSelection ? Color(.label) : color.opacity(0.15)) : Color(.systemGray6))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(isSelected ? (invertSelection ? Color.clear : color.opacity(0.3)) : Color.clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PressableRowStyle())
             }
         }
-        .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

@@ -23,7 +23,11 @@ struct DeparturesResponse: Codable {
 
 /// Represents a single departure
 struct Departure: Codable, Identifiable {
-    let id = UUID() // Unique identifier for SwiftUI lists
+    // Stable across refreshes so SwiftUI keeps row identity — times update in place
+    // (digits can roll) and only genuinely new/departed trips fade, instead of every
+    // row being replaced on each fetch. The view model dedupes by journey id, so this
+    // is unique within a fetch.
+    var id: Int { journey.id }
     let direction: String
     let directionCode: Int
     let destination: String
