@@ -99,12 +99,14 @@ struct SLTrackerWidgetEntryView: View {
             if let departures = upcomingDepartures, !departures.isEmpty, let stationName = entry.stationName {
                 // Show departures still ahead of this entry's moment
                 departuresView(departures: departures, stationName: stationName)
+            } else if entry.errorMessage != nil {
+                // Load failed with no cached departures to fall back on. Check this
+                // BEFORE the station branch so a network blip reads as "couldn't
+                // refresh", not a misleading "no departures".
+                errorView(stationName: entry.stationName)
             } else if let stationName = entry.stationName {
-                // Station exists but no departures
+                // Station loaded, but genuinely nothing upcoming
                 noDeparturesView(stationName: stationName)
-            } else if let errorMessage = entry.errorMessage {
-                // Show error message for debugging
-                errorView(errorMessage: errorMessage)
             } else {
                 // No pinned stations
                 noPinnedStationsView
@@ -116,11 +118,12 @@ struct SLTrackerWidgetEntryView: View {
     
     /// View showing the departures list
     private func departuresView(departures: [Departure], stationName: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let primaryMode = slPrimaryMode(from: Set(departures.map { $0.line.transportMode }))
+        return VStack(alignment: .leading, spacing: 8) {
             // Header with station name and refresh info
             HStack {
-                Image(systemName: widgetIcon(for: departures))
-                    .foregroundStyle(widgetIconColor(for: departures))
+                Image(systemName: primaryMode.icon)
+                    .foregroundStyle(primaryMode.tint)
                     .font(.footnote.weight(.medium))
                 
                 Text(stationName)
@@ -170,7 +173,7 @@ struct SLTrackerWidgetEntryView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(width: 24, height: 20)
-                .background(lineColor(for: departure))
+                .background(slLineBadgeColor(mode: departure.line.transportMode, designation: departure.line.designation))
                 .clipShape(.rect(cornerRadius: 4))
 
             // Destination
@@ -181,10 +184,10 @@ struct SLTrackerWidgetEntryView: View {
 
             Spacer()
 
-            // Time - show actual time instead of relative time
+            // Time - show actual clock time; tint urgent when leaving now
             Text(formatDepartureTime(departure.expected))
                 .font(.caption.bold())
-                .foregroundStyle(.blue)
+                .foregroundStyle(slIsImminent(expected: departure.expected, now: entry.date) ? .orange : .slAccent)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
@@ -232,97 +235,29 @@ struct SLTrackerWidgetEntryView: View {
         .padding(.horizontal, 12)
     }
     
-    /// View for displaying error messages
-    private func errorView(errorMessage: String) -> some View {
+    /// Calm fallback shown when a load fails with no cached departures to fall
+    /// back on. Mirrors the app's calm error tone — secondary, no red, no "Error:".
+    private func errorView(stationName: String?) -> some View {
         VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: "wifi.exclamationmark")
                 .font(.title2)
-                .foregroundStyle(.red)
-            
-            Text("Error: \(errorMessage)")
+                .foregroundStyle(.secondary)
+
+            Text("Couldn't refresh")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
+
+            if let stationName {
+                Text(stationName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 12)
     }
     
-    /// Returns the appropriate color based on transport mode and line
-    private func lineColor(for departure: Departure) -> Color {
-        switch departure.line.transportMode {
-        case "METRO":
-            switch departure.line.designation {
-            case "13", "14": return .red
-            case "17", "18", "19": return .green
-            case "10", "11": return .blue
-            default: return .gray
-            }
-        case "TRAM": return .orange
-        case "BUS": return .indigo
-        case "TRAIN": return .purple
-        case "SHIP": return .teal
-        default: return .gray
-        }
-    }
-    
-    /// Returns the appropriate icon based on the departures' transport modes
-    private func widgetIcon(for departures: [Departure]) -> String {
-        let modes = Set(departures.map { $0.line.transportMode })
-        if modes.contains("METRO") || modes.isEmpty { return "tram.tunnel.fill" }
-        if modes.count == 1, let mode = modes.first {
-            switch mode {
-            case "TRAM": return "tram.fill"
-            case "BUS": return "bus.fill"
-            case "TRAIN": return "train.side.front.car"
-            case "SHIP": return "ferry.fill"
-            default: return "tram.tunnel.fill"
-            }
-        }
-        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
-        for mode in priority {
-            if modes.contains(mode) {
-                switch mode {
-                case "TRAM": return "tram.fill"
-                case "BUS": return "bus.fill"
-                case "TRAIN": return "train.side.front.car"
-                case "SHIP": return "ferry.fill"
-                default: break
-                }
-            }
-        }
-        return "tram.tunnel.fill"
-    }
-
-    /// Returns the appropriate icon color based on the departures' transport modes
-    private func widgetIconColor(for departures: [Departure]) -> Color {
-        let modes = Set(departures.map { $0.line.transportMode })
-        if modes.contains("METRO") || modes.isEmpty { return .blue }
-        if modes.count == 1, let mode = modes.first {
-            switch mode {
-            case "TRAM": return .orange
-            case "BUS": return .indigo
-            case "TRAIN": return .purple
-            case "SHIP": return .teal
-            default: return .blue
-            }
-        }
-        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
-        for mode in priority {
-            if modes.contains(mode) {
-                switch mode {
-                case "TRAM": return .orange
-                case "BUS": return .indigo
-                case "TRAIN": return .purple
-                case "SHIP": return .teal
-                default: break
-                }
-            }
-        }
-        return .blue
-    }
-
     // MARK: - Static Formatters
 
     private static let timeFormatter: DateFormatter = {

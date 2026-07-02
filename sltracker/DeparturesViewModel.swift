@@ -36,7 +36,7 @@ final class DeparturesViewModel {
     // MARK: - Private Properties
 
     /// The API manager for making network requests
-    private let apiManager = APIManager()
+    private let apiManager = APIManager.shared
 
     // MARK: - Public Methods
 

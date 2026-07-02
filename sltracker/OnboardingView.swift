@@ -78,7 +78,7 @@ struct OnboardingView: View {
                 .scaledToFill()
                 .frame(width: 96, height: 96)
                 .clipShape(Circle())
-                .shadow(color: .blue.opacity(0.3), radius: 12, x: 0, y: 4)
+                .shadow(color: .slAccent.opacity(0.3), radius: 12, x: 0, y: 4)
         }
     }
 
@@ -158,7 +158,7 @@ struct OnboardingView: View {
         }
         .buttonBorderShape(.capsule)
         .controlSize(.large)
-        .tint(.blue)
+        .tint(.slAccent)
         .frame(maxWidth: 360)
     }
 
@@ -261,8 +261,8 @@ private struct MockPinnedStationsCard: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
-                .background(Circle().fill(.blue))
-                .shadow(color: .blue.opacity(0.3), radius: 4, x: 0, y: 2)
+                .background(Circle().fill(Color.slAccent))
+                .shadow(color: .slAccent.opacity(0.3), radius: 4, x: 0, y: 2)
                 .offset(x: 10, y: -10)
                 .symbolEffect(.bounce, value: pinBounce)
         }
@@ -322,10 +322,11 @@ private struct MockWidgetCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var revealed = false
 
+    // Use the real line-badge colors so the preview matches the live widget.
     private static let departures: [MockDeparture] = [
-        MockDeparture(line: "14", color: .red, destination: "Fruängen", time: "12:04"),
-        MockDeparture(line: "17", color: .green, destination: "Skarpnäck", time: "12:07"),
-        MockDeparture(line: "10", color: .blue, destination: "Hjulsta", time: "12:09")
+        MockDeparture(line: "14", color: slLineBadgeColor(mode: "METRO", designation: "14"), destination: "Fruängen", time: "12:04"),
+        MockDeparture(line: "17", color: slLineBadgeColor(mode: "METRO", designation: "17"), destination: "Skarpnäck", time: "12:07"),
+        MockDeparture(line: "10", color: slLineBadgeColor(mode: "METRO", designation: "10"), destination: "Hjulsta", time: "12:09")
     ]
 
     var body: some View {

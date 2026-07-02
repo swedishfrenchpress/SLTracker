@@ -96,6 +96,7 @@ struct ContentView: View {
                                 }
                                 .tint(.primary)
                                 .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
+                                .accessibilityAddTraits(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? .isSelected : [])
 
                                 Button(action: refreshDepartures) {
                                     Image(systemName: "arrow.clockwise")
@@ -161,6 +162,8 @@ struct ContentView: View {
             TextField("Search for a station", text: $stationName)
                 .focused($isSearchFieldFocused)
                 .submitLabel(.search)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.words)
                 .onSubmit {
                     if let firstSite = filteredStations.first {
                         selectStation(name: firstSite.name, siteID: String(firstSite.id))
@@ -336,12 +339,11 @@ struct ContentView: View {
         VStack(spacing: 20) {
             ProgressView()
                 .scaleEffect(1.3)
-                .tint(.blue)
+                .tint(.slAccent)
 
             Text("Loading departures...")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-                .opacity(0.8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -430,10 +432,11 @@ struct ContentView: View {
             }
 
             ForEach(availableTransportModes, id: \.self) { mode in
+                let transportMode = TransportMode(code: mode)
                 FilterPillButton(
-                    label: transportModeName(for: mode),
-                    icon: transportModeIcon(for: mode),
-                    color: transportModeColor(for: mode),
+                    label: transportMode.displayName,
+                    icon: transportMode.icon,
+                    color: transportMode.tint,
                     isSelected: selectedTransportFilter == mode
                 ) {
                     withAnimation(reduceMotion ? .none : .default) {
@@ -532,7 +535,7 @@ struct ContentView: View {
     private var pinnedStationsView: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Pinned Stations")
+                Text("Pinned stations")
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
@@ -578,39 +581,6 @@ struct ContentView: View {
     }
 
     // MARK: - Transport Mode Helpers
-
-    private func transportModeIcon(for mode: String) -> String {
-        switch mode {
-        case "METRO": return "tram.tunnel.fill"
-        case "TRAM": return "tram.fill"
-        case "BUS": return "bus.fill"
-        case "TRAIN": return "train.side.front.car"
-        case "SHIP": return "ferry.fill"
-        default: return "questionmark.circle"
-        }
-    }
-
-    private func transportModeName(for mode: String) -> String {
-        switch mode {
-        case "METRO": return "Metro"
-        case "TRAM": return "Tram"
-        case "BUS": return "Bus"
-        case "TRAIN": return "Train"
-        case "SHIP": return "Ferry"
-        default: return mode
-        }
-    }
-
-    private func transportModeColor(for mode: String) -> Color {
-        switch mode {
-        case "METRO": return .blue
-        case "TRAM": return .orange
-        case "BUS": return .indigo
-        case "TRAIN": return .purple
-        case "SHIP": return .teal
-        default: return .gray
-        }
-    }
 
     /// Ordered list of transport modes present in current departures
     private var availableTransportModes: [String] {
@@ -717,8 +687,8 @@ struct PinnedStationRow: View {
         }) {
             HStack(spacing: 16) {
                 // Station icon based on transport modes
-                Image(systemName: stationIcon)
-                    .foregroundStyle(stationIconColor)
+                Image(systemName: primaryMode.icon)
+                    .foregroundStyle(primaryMode.tint)
                     .font(.body.weight(.medium))
                     .frame(width: 28, height: 28)
                     .background(Color(.systemGray5))
@@ -763,58 +733,9 @@ struct PinnedStationRow: View {
         }
     }
 
-    private var stationIcon: String {
-        let modes = station.transportModes
-        if modes.contains("METRO") || modes.isEmpty { return "tram.tunnel.fill" }
-        if modes.count == 1, let mode = modes.first {
-            switch mode {
-            case "TRAM": return "tram.fill"
-            case "BUS": return "bus.fill"
-            case "TRAIN": return "train.side.front.car"
-            case "SHIP": return "ferry.fill"
-            default: return "tram.tunnel.fill"
-            }
-        }
-        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
-        for mode in priority {
-            if modes.contains(mode) {
-                switch mode {
-                case "TRAM": return "tram.fill"
-                case "BUS": return "bus.fill"
-                case "TRAIN": return "train.side.front.car"
-                case "SHIP": return "ferry.fill"
-                default: break
-                }
-            }
-        }
-        return "tram.tunnel.fill"
-    }
-
-    private var stationIconColor: Color {
-        let modes = station.transportModes
-        if modes.contains("METRO") || modes.isEmpty { return .blue }
-        if modes.count == 1, let mode = modes.first {
-            switch mode {
-            case "TRAM": return .orange
-            case "BUS": return .indigo
-            case "TRAIN": return .purple
-            case "SHIP": return .teal
-            default: return .blue
-            }
-        }
-        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
-        for mode in priority {
-            if modes.contains(mode) {
-                switch mode {
-                case "TRAM": return .orange
-                case "BUS": return .indigo
-                case "TRAIN": return .purple
-                case "SHIP": return .teal
-                default: break
-                }
-            }
-        }
-        return .blue
+    /// The representative mode driving this row's icon + tint.
+    private var primaryMode: TransportMode {
+        slPrimaryMode(from: Set(station.transportModes))
     }
 }
 
@@ -825,6 +746,8 @@ struct DepartureRowView: View {
     let departure: Departure
 
     var body: some View {
+        let badgeColor = slLineBadgeColor(mode: departure.line.transportMode, designation: departure.line.designation)
+        let imminent = slIsImminent(expected: departure.expected)
         HStack(spacing: 16) {
             // Line number and direction
             VStack(alignment: .leading, spacing: 6) {
@@ -833,10 +756,11 @@ struct DepartureRowView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .frame(width: 36, height: 28)
-                    .background(lineColor(for: departure))
+                    .padding(.horizontal, 4)
+                    .frame(minWidth: 36, minHeight: 28)
+                    .background(badgeColor)
                     .clipShape(.rect(cornerRadius: 8))
-                    .shadow(color: lineColor(for: departure).opacity(0.3), radius: 4, x: 0, y: 2)
+                    .shadow(color: badgeColor.opacity(0.3), radius: 4, x: 0, y: 2)
 
                 Text(departure.destination)
                     .font(.subheadline.weight(.medium))
@@ -849,7 +773,7 @@ struct DepartureRowView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(departure.display)
                     .font(.headline)
-                    .foregroundStyle(isImminent ? .orange : .blue)
+                    .foregroundStyle(imminent ? .orange : .slAccent)
 
                 if let platform = departure.stopPoint.designation {
                     Text("Platform \(platform)")
@@ -864,11 +788,6 @@ struct DepartureRowView: View {
         .accessibilityLabel(accessibilityDescription)
     }
 
-    /// Whether this departure is imminent (leaving "Nu"/now or within minutes).
-    private var isImminent: Bool {
-        departure.display.contains("Nu") || departure.display.contains("min")
-    }
-
     /// A single, VoiceOver-friendly description of the whole row.
     private var accessibilityDescription: String {
         let time = departure.display == "Nu" ? "now" : departure.display
@@ -877,24 +796,6 @@ struct DepartureRowView: View {
             parts.append("platform \(platform)")
         }
         return parts.joined(separator: ", ")
-    }
-
-    /// Returns the appropriate color based on transport mode and line
-    private func lineColor(for departure: Departure) -> Color {
-        switch departure.line.transportMode {
-        case "METRO":
-            switch departure.line.designation {
-            case "13", "14": return .red
-            case "17", "18", "19": return .green
-            case "10", "11": return .blue
-            default: return .gray
-            }
-        case "TRAM": return .orange
-        case "BUS": return .indigo
-        case "TRAIN": return .purple
-        case "SHIP": return .teal
-        default: return .gray
-        }
     }
 
 }
@@ -971,6 +872,7 @@ struct FilterPillButton: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
