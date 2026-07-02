@@ -30,6 +30,9 @@ final class DeparturesViewModel {
     /// The current site ID being displayed
     var currentSiteID = ""
 
+    /// When departures were last successfully refreshed
+    var lastUpdated: Date?
+
     // MARK: - Private Properties
 
     /// The API manager for making network requests
@@ -39,6 +42,17 @@ final class DeparturesViewModel {
 
     /// Fetches all departures for a station and its related sub-stations
     func fetchDepartures(for siteID: String, stationName: String) {
+        Task { await performFetch(for: siteID, stationName: stationName) }
+    }
+
+    /// Awaitable variant for pull-to-refresh — the caller's spinner stays until the
+    /// fetch actually completes.
+    func fetchDepartures(for siteID: String, stationName: String) async {
+        await performFetch(for: siteID, stationName: stationName)
+    }
+
+    /// Shared fetch implementation used by both the fire-and-forget and awaitable entry points.
+    private func performFetch(for siteID: String, stationName: String) async {
         errorMessage = nil
         isLoading = true
         currentStation = stationName
@@ -48,45 +62,44 @@ final class DeparturesViewModel {
         let allIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
         let idsToFetch = allIDs.isEmpty ? [siteID] : allIDs
 
-        Task {
-            do {
-                // Fetch departures from all related stations in parallel
-                let allDepartures = try await withThrowingTaskGroup(of: [Departure].self) { group in
-                    for id in idsToFetch {
-                        group.addTask { [apiManager] in
-                            try await apiManager.fetchDepartures(for: id)
-                        }
+        do {
+            // Fetch departures from all related stations in parallel
+            let allDepartures = try await withThrowingTaskGroup(of: [Departure].self) { group in
+                for id in idsToFetch {
+                    group.addTask { [apiManager] in
+                        try await apiManager.fetchDepartures(for: id)
                     }
-
-                    var merged: [Departure] = []
-                    for try await batch in group {
-                        merged.append(contentsOf: batch)
-                    }
-                    return merged
                 }
 
-                // Filter out past departures and deduplicate by journey ID
-                let now = Date()
-                var seenJourneys = Set<Int>()
-                let futureDepartures = allDepartures.filter { dep in
-                    guard parseDate(from: dep.expected) >= now else { return false }
-                    guard seenJourneys.insert(dep.journey.id).inserted else { return false }
-                    return true
+                var merged: [Departure] = []
+                for try await batch in group {
+                    merged.append(contentsOf: batch)
                 }
-
-                // Sort by expected time
-                departures = futureDepartures.sorted {
-                    parseDate(from: $0.expected) < parseDate(from: $1.expected)
-                }
-
-                WidgetCenter.shared.reloadAllTimelines()
-
-            } catch {
-                handleError(error)
+                return merged
             }
 
-            isLoading = false
+            // Filter out past departures and deduplicate by journey ID
+            let now = Date()
+            var seenJourneys = Set<Int>()
+            let futureDepartures = allDepartures.filter { dep in
+                guard parseDate(from: dep.expected) >= now else { return false }
+                guard seenJourneys.insert(dep.journey.id).inserted else { return false }
+                return true
+            }
+
+            // Sort by expected time
+            departures = futureDepartures.sorted {
+                parseDate(from: $0.expected) < parseDate(from: $1.expected)
+            }
+
+            lastUpdated = Date()
+            WidgetCenter.shared.reloadAllTimelines()
+
+        } catch {
+            handleError(error)
         }
+
+        isLoading = false
     }
     
     /// Clears all departures and resets the state
@@ -94,6 +107,7 @@ final class DeparturesViewModel {
         departures = []
         currentStation = ""
         errorMessage = nil
+        lastUpdated = nil
     }
     
     // MARK: - Private Methods

@@ -464,7 +464,19 @@ struct ContentView: View {
                                 .padding(.leading)
                         }
                     }
+
+                    if let updated = viewModel.lastUpdated {
+                        Text("Updated \(updated, format: .dateTime.hour().minute())")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 16)
+                            .padding(.bottom, 8)
+                    }
                 }
+            }
+            .refreshable {
+                await viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: viewModel.currentStation)
             }
         }
     }
