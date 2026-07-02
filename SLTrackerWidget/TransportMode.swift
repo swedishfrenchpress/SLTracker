@@ -27,7 +27,7 @@ enum TransportMode: String {
         case .metro: return "Metro"
         case .tram:  return "Tram"
         case .bus:   return "Bus"
-        case .train: return "Train"
+        case .train: return "Pendeltåg"
         case .ship:  return "Ferry"
         }
     }

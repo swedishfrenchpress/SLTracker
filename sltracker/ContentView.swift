@@ -17,6 +17,12 @@ struct ContentView: View {
     /// The pinned stations manager
     @State private var pinnedManager = PinnedStationsManager()
 
+    /// Widget-level settings (transit-mode filter)
+    @State private var settings = WidgetSettingsManager()
+
+    /// Whether the settings sheet is presented
+    @State private var showingSettings = false
+
     /// Navigation state for deep linking
     @Environment(NavigationState.self) private var navigationState
 
@@ -78,6 +84,21 @@ struct ContentView: View {
             }
             .navigationTitle("SL Tracker")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.body.weight(.medium))
+                    }
+                    .tint(.primary)
+                    .accessibilityLabel("Settings")
+                }
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView(settings: settings)
+            }
             .navigationDestination(isPresented: $isSearchMode) {
                 searchResultsView
                     .navigationTitle(stationName)
