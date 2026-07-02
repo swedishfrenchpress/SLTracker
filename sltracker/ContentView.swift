@@ -113,7 +113,13 @@ struct ContentView: View {
         }
         .onChange(of: navigationState.shouldNavigateToStation) { _, shouldNavigate in
             if shouldNavigate, let name = navigationState.targetStation {
-                let siteID = SiteStore.shared.getSiteID(for: name) ?? ""
+                // The widget deep-links by name only. Prefer an exact match, but
+                // fall back to search consolidation so base names that aren't a
+                // standalone JSON entry (e.g. "Kungsträdgården") still resolve —
+                // otherwise the station page opens blank.
+                let siteID = SiteStore.shared.getSiteID(for: name)
+                    ?? SiteStore.shared.search(query: name).first.map { String($0.id) }
+                    ?? ""
                 selectStation(name: name, siteID: siteID)
                 navigationState.clearNavigationTarget()
             }
@@ -825,6 +831,8 @@ struct DepartureRowView: View {
                 Text(departure.line.designation)
                     .font(.callout.bold())
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .frame(width: 36, height: 28)
                     .background(lineColor(for: departure))
                     .clipShape(.rect(cornerRadius: 8))
