@@ -26,6 +26,38 @@ struct SLTrackerWidgetEntry: TimelineEntry, Codable {
     }
 }
 
+extension SLTrackerWidgetEntry {
+    /// Static sample for the placeholder and the widget gallery — renders instantly,
+    /// no network round-trip.
+    static var sample: SLTrackerWidgetEntry {
+        SLTrackerWidgetEntry(
+            date: Date(),
+            stationName: "T-Centralen",
+            departures: [
+                Departure(
+                    direction: "North", directionCode: 1, destination: "Mörby centrum",
+                    state: "EXPECTED", scheduled: "2025-01-27T10:00:00", expected: "2025-01-27T10:00:00",
+                    display: "2 min", journey: Journey(id: 1, state: "EXPECTED", predictionState: "NORMAL"),
+                    stopArea: StopArea(id: 1, name: "T-Centralen", type: "METROSTN"),
+                    stopPoint: StopPoint(id: 1, name: "T-Centralen", designation: "1"),
+                    line: Line(id: 1, designation: "14", transportAuthorityId: 1, transportMode: "METRO", groupOfLines: "Röda linjen"),
+                    deviations: nil
+                ),
+                Departure(
+                    direction: "South", directionCode: 2, destination: "Fruängen",
+                    state: "EXPECTED", scheduled: "2025-01-27T10:05:00", expected: "2025-01-27T10:05:00",
+                    display: "7 min", journey: Journey(id: 2, state: "EXPECTED", predictionState: "NORMAL"),
+                    stopArea: StopArea(id: 1, name: "T-Centralen", type: "METROSTN"),
+                    stopPoint: StopPoint(id: 2, name: "T-Centralen", designation: "2"),
+                    line: Line(id: 2, designation: "14", transportAuthorityId: 1, transportMode: "METRO", groupOfLines: "Röda linjen"),
+                    deviations: nil
+                )
+            ],
+            errorMessage: nil
+        )
+    }
+}
+
 /// The main widget view that displays departures for the first pinned station
 struct SLTrackerWidgetEntryView: View {
     var entry: SLTrackerWidgetEntry
@@ -301,22 +333,34 @@ struct SLTrackerWidgetEntryView: View {
     }
 }
 
+/// Shared, read-only formatter for the provider's date math. Safe to read across tasks.
+private let widgetAPIDateFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+    formatter.timeZone = TimeZone(identifier: "Europe/Stockholm")
+    return formatter
+}()
+
+private func widgetParseDate(_ dateString: String) -> Date {
+    widgetAPIDateFormatter.date(from: dateString) ?? Date()
+}
+
 /// The widget provider that supplies timeline entries
 struct SLTrackerWidgetProvider: TimelineProvider {
     typealias Entry = SLTrackerWidgetEntry
     
     /// Provides a placeholder entry for when the widget is first added
     func placeholder(in context: Context) -> SLTrackerWidgetEntry {
-        return SLTrackerWidgetEntry(
-            date: Date(),
-            stationName: "Loading...",
-            departures: nil,
-            errorMessage: nil
-        )
+        return .sample
     }
-    
+
     /// Provides a snapshot entry for the widget gallery
     func getSnapshot(in context: Context, completion: @escaping (SLTrackerWidgetEntry) -> Void) {
+        // The gallery/preview should render instantly without a network round-trip.
+        if context.isPreview {
+            completion(.sample)
+            return
+        }
         Task {
             let entry = await fetchWidgetData()
             completion(entry)
@@ -363,11 +407,13 @@ struct SLTrackerWidgetProvider: TimelineProvider {
         
         // Get the first pinned station
         guard let firstStation = pinnedStations.first else {
+            // Leave stationName and errorMessage nil so the view routes to the
+            // friendly "Pin a station" empty state rather than a dev-facing error.
             let entry = SLTrackerWidgetEntry(
                 date: Date(),
                 stationName: nil,
                 departures: nil,
-                errorMessage: "No pinned stations found"
+                errorMessage: nil
             )
             cacheWidgetData(entry)
             return entry
@@ -391,11 +437,15 @@ struct SLTrackerWidgetProvider: TimelineProvider {
                 return merged
             }
 
-            // Deduplicate by journey ID and sort by expected time
+            // Drop past departures, deduplicate by journey ID, and sort
+            // chronologically — mirroring the app so the widget never shows
+            // trains that have already left.
+            let now = Date()
             var seenJourneys = Set<Int>()
             let departures = allDepartures
+                .filter { widgetParseDate($0.expected) >= now }
                 .filter { seenJourneys.insert($0.journey.id).inserted }
-                .sorted { $0.expected < $1.expected }
+                .sorted { widgetParseDate($0.expected) < widgetParseDate($1.expected) }
 
             let entry = SLTrackerWidgetEntry(
                 date: Date(),
