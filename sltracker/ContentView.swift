@@ -33,6 +33,9 @@ struct ContentView: View {
     @State private var showingThankYou = false
     @State private var easterEggTapCount = 0
 
+    /// First-launch onboarding — persisted so it only shows once
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
     /// Focus state for search bar
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -90,7 +93,7 @@ struct ContentView: View {
                                 }) {
                                     Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
                                         .font(.body.weight(.medium))
-                                        .contentTransition(.symbolEffect(.replace))
+                                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                                 }
                                 .tint(.primary)
                                 .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
@@ -128,8 +131,16 @@ struct ContentView: View {
 
         // Easter egg overlay — above NavigationStack, covers nav bar
         ThankYouView(isVisible: $showingThankYou)
+
+        // First-launch onboarding — topmost overlay, covers nav bar
+        if !hasCompletedOnboarding {
+            OnboardingView()
+                .zIndex(1)
+                .transition(.opacity)
+        }
         }
         .animation(reduceMotion ? .none : .default, value: showingThankYou)
+        .animation(reduceMotion ? .none : .default, value: hasCompletedOnboarding)
     }
 
     // MARK: - View Components
@@ -157,6 +168,9 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -10)
                 }
                 .accessibilityLabel("Clear search")
             }
@@ -230,7 +244,7 @@ struct ContentView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation {
+            withAnimation(reduceMotion ? .none : .default) {
                 isSearchFieldFocused = false
             }
         }
@@ -263,14 +277,21 @@ struct ContentView: View {
     /// The main content section showing departures or status
     private var contentSection: some View {
         VStack {
-            if viewModel.isLoading {
+            if !viewModel.departures.isEmpty {
+                // Keep the last-known list visible while refreshing or after a failed
+                // refresh — surface any error as a calm inline banner, never a wall.
+                VStack(spacing: 0) {
+                    if let errorMessage = viewModel.errorMessage {
+                        errorBanner(message: errorMessage)
+                    }
+                    departuresList
+                }
+                .transition(.opacity)
+            } else if viewModel.isLoading {
                 loadingView
                     .transition(.opacity)
             } else if let errorMessage = viewModel.errorMessage {
                 errorView(message: errorMessage)
-                    .transition(.opacity)
-            } else if !viewModel.departures.isEmpty {
-                departuresList
                     .transition(.opacity)
             } else if !viewModel.currentStation.isEmpty {
                 noDeparturesView
@@ -281,6 +302,7 @@ struct ContentView: View {
         }
         .animation(reduceMotion ? .none : .default, value: viewModel.isLoading)
         .animation(reduceMotion ? .none : .default, value: viewModel.departures.isEmpty)
+        .animation(reduceMotion ? .none : .default, value: viewModel.errorMessage)
         .padding(.top, 16)
     }
 
@@ -299,15 +321,16 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Error message display
+    /// Full-screen state shown only when there's nothing else to display.
+    /// Kept calm — a transient signal blip shouldn't read as a system failure.
     private func errorView(message: String) -> some View {
         VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: "wifi.exclamationmark")
                 .font(.largeTitle)
-                .foregroundStyle(.orange)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            Text("Error")
+            Text("Couldn't load departures")
                 .font(.headline)
 
             Text(message)
@@ -321,6 +344,37 @@ struct ContentView: View {
             .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Calm inline banner shown above still-visible departures when a refresh fails,
+    /// so the rider keeps the times already on screen.
+    private func errorBanner(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Spacer(minLength: 8)
+
+            Button("Retry") {
+                refreshDepartures()
+            }
+            .font(.footnote.weight(.semibold))
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .combine)
     }
 
     /// Filter pills for transport modes (only shown when 2+ modes available)
@@ -345,7 +399,7 @@ struct ContentView: View {
                 isSelected: selectedTransportFilter == nil,
                 invertSelection: true
             ) {
-                withAnimation {
+                withAnimation(reduceMotion ? .none : .default) {
                     selectedTransportFilter = nil
                 }
             }
@@ -357,7 +411,7 @@ struct ContentView: View {
                     color: transportModeColor(for: mode),
                     isSelected: selectedTransportFilter == mode
                 ) {
-                    withAnimation {
+                    withAnimation(reduceMotion ? .none : .default) {
                         selectedTransportFilter = mode
                     }
                 }
@@ -610,7 +664,7 @@ struct ContentView: View {
             easterEggTapCount = 0 // Reset for next time
 
             // Show thank you screen
-            withAnimation {
+            withAnimation(reduceMotion ? .none : .default) {
                 showingThankYou = true
             }
         }
@@ -628,6 +682,9 @@ struct PinnedStationRow: View {
     let onUnpin: () -> Void
 
     @State private var isPressed = false
+
+    /// Accessibility: reduce or disable animations for motion-sensitive users
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: {
@@ -658,7 +715,6 @@ struct PinnedStationRow: View {
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isPressed ? 5 : 0))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -668,7 +724,7 @@ struct PinnedStationRow: View {
         }
         .buttonStyle(PlainButtonStyle())
         .onLongPressGesture(minimumDuration: 0.01, maximumDistance: .infinity, pressing: { isPressing in
-            withAnimation {
+            withAnimation(reduceMotion ? .none : .default) {
                 isPressed = isPressing
             }
         }, perform: {})
@@ -769,7 +825,7 @@ struct DepartureRowView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(departure.display)
                     .font(.headline)
-                    .foregroundStyle(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
+                    .foregroundStyle(isImminent ? .orange : .blue)
 
                 if let platform = departure.stopPoint.designation {
                     Text("Platform \(platform)")
@@ -778,6 +834,25 @@ struct DepartureRowView: View {
                 }
             }
         }
+        // Merge the fragments into one spoken sentence for VoiceOver, and keep
+        // urgency legible without relying on colour alone.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    /// Whether this departure is imminent (leaving "Nu"/now or within minutes).
+    private var isImminent: Bool {
+        departure.display.contains("Nu") || departure.display.contains("min")
+    }
+
+    /// A single, VoiceOver-friendly description of the whole row.
+    private var accessibilityDescription: String {
+        let time = departure.display == "Nu" ? "now" : departure.display
+        var parts = ["Line \(departure.line.designation) to \(departure.destination)", time]
+        if let platform = departure.stopPoint.designation {
+            parts.append("platform \(platform)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     /// Returns the appropriate color based on transport mode and line
@@ -965,10 +1040,10 @@ struct ThankYouView: View {
                     Spacer()
 
                     VStack(spacing: 8) {
-                        Text("Dedicated to all my friends in Berlin.")
+                        Text("Dedicated to my friend Adam.")
                             .font(.body)
                             .foregroundStyle(.secondary)
-                        Text("I miss you.")
+                        Text("Thank you for testing this app early and helping me build it.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                     }
@@ -977,7 +1052,7 @@ struct ThankYouView: View {
 
                     // Simple close text
                     Button("Close") {
-                        withAnimation {
+                        withAnimation(UIAccessibility.isReduceMotionEnabled ? .none : .default) {
                             isVisible = false
                         }
                     }
