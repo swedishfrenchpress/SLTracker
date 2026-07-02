@@ -5,3 +5,33 @@ dist/
 build/
 .DS_Store
 *.log
+
+# AI coding-tool caches (not project files)
+.codebuddy/
+.commandcode/
+.continue/
+.crush/
+.factory/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.windsurf/
+.zencoder/
+/skills/
+
+# Untracked skill caches dropped into otherwise-tracked skill dirs
+**/skills/design-motion-principles
+**/skills/grill-me
+.goose/skills/mobile-ios-design
+.agents/skills/swiftui-liquid-glass/agents
