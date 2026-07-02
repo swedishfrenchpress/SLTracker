@@ -33,6 +33,9 @@ struct ContentView: View {
     @State private var showingThankYou = false
     @State private var easterEggTapCount = 0
 
+    /// First-launch onboarding — persisted so it only shows once
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
     /// Focus state for search bar
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -44,8 +47,7 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
 
-    /// Tracked tasks for proper cancellation
-    @State private var selectStationTask: Task<Void, Never>?
+    /// Tracked task for proper cancellation of the easter-egg reset timer
     @State private var easterEggResetTask: Task<Void, Never>?
 
     // Station data is now loaded from all_sites.json via SiteStore
@@ -86,23 +88,27 @@ struct ContentView: View {
                                 Button(action: {
                                     let modes = Array(Set(viewModel.departures.map { $0.line.transportMode }))
                                     let relatedIDs = SiteStore.shared.relatedSiteIDs(for: stationName)
+                                    UINotificationFeedbackGenerator().notificationOccurred(.success)
                                     pinnedManager.togglePin(id: getCurrentSiteID(), name: stationName, transportModes: modes, relatedSiteIDs: relatedIDs)
                                 }) {
                                     Image(systemName: pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "pin.fill" : "pin")
                                         .font(.body.weight(.medium))
-                                        .contentTransition(.symbolEffect(.replace))
+                                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                                 }
                                 .tint(.primary)
                                 .accessibilityLabel(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? "Unpin station" : "Pin station")
+                                .accessibilityAddTraits(pinnedManager.isStationPinned(id: getCurrentSiteID()) ? .isSelected : [])
 
                                 Button(action: refreshDepartures) {
                                     Image(systemName: "arrow.clockwise")
                                         .font(.body.weight(.medium))
-                                        .rotationEffect(.degrees(viewModel.isLoading && !reduceMotion ? 360 : 0))
-                                        .animation(viewModel.isLoading && !reduceMotion ? .linear(duration: 1.0).repeatForever(autoreverses: false) : .default, value: viewModel.isLoading)
+                                        // Continuous system rotate while loading — stops cleanly
+                                        // instead of the old hand-driven angle settling backward.
+                                        .symbolEffect(.rotate, options: .repeating, isActive: viewModel.isLoading && !reduceMotion)
                                 }
                                 .tint(.primary)
                                 .accessibilityLabel("Refresh departures")
+                                .disabled(viewModel.isLoading)
                             }
                         }
                     }
@@ -110,7 +116,13 @@ struct ContentView: View {
         }
         .onChange(of: navigationState.shouldNavigateToStation) { _, shouldNavigate in
             if shouldNavigate, let name = navigationState.targetStation {
-                let siteID = SiteStore.shared.getSiteID(for: name) ?? ""
+                // The widget deep-links by name only. Prefer an exact match, but
+                // fall back to search consolidation so base names that aren't a
+                // standalone JSON entry (e.g. "Kungsträdgården") still resolve —
+                // otherwise the station page opens blank.
+                let siteID = SiteStore.shared.getSiteID(for: name)
+                    ?? SiteStore.shared.search(query: name).first.map { String($0.id) }
+                    ?? ""
                 selectStation(name: name, siteID: siteID)
                 navigationState.clearNavigationTarget()
             }
@@ -128,8 +140,16 @@ struct ContentView: View {
 
         // Easter egg overlay — above NavigationStack, covers nav bar
         ThankYouView(isVisible: $showingThankYou)
+
+        // First-launch onboarding — topmost overlay, covers nav bar
+        if !hasCompletedOnboarding {
+            OnboardingView()
+                .zIndex(1)
+                .transition(.opacity)
+        }
         }
         .animation(reduceMotion ? .none : .default, value: showingThankYou)
+        .animation(reduceMotion ? .none : .default, value: hasCompletedOnboarding)
     }
 
     // MARK: - View Components
@@ -144,6 +164,8 @@ struct ContentView: View {
             TextField("Search for a station", text: $stationName)
                 .focused($isSearchFieldFocused)
                 .submitLabel(.search)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.words)
                 .onSubmit {
                     if let firstSite = filteredStations.first {
                         selectStation(name: firstSite.name, siteID: String(firstSite.id))
@@ -157,6 +179,9 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -10)
                 }
                 .accessibilityLabel("Clear search")
             }
@@ -191,7 +216,7 @@ struct ContentView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressableRowStyle())
 
                     if site.id != filteredStations.prefix(8).last?.id {
                         Divider()
@@ -205,6 +230,22 @@ struct ContentView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
+    /// Shown when the typed query matches no stations.
+    private var noSearchResultsView: some View {
+        VStack(spacing: 8) {
+            Text("No stations found")
+                .font(.headline)
+
+            Text("Check the spelling, or try the Swedish name.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 48)
+        .padding(.horizontal)
+    }
+
     /// Home screen view
     private var homeScreenView: some View {
         VStack(spacing: 0) {
@@ -213,6 +254,9 @@ struct ContentView: View {
             if isSearchFieldFocused && !filteredStations.isEmpty {
                 searchSuggestionsView
                     .padding(.top, 8)
+                    .transition(.opacity)
+            } else if isSearchFieldFocused && !stationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                noSearchResultsView
                     .transition(.opacity)
             } else if !isSearchFieldFocused {
                 Group {
@@ -230,20 +274,21 @@ struct ContentView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            withAnimation {
+            withAnimation(reduceMotion ? .none : .snappy) {
                 isSearchFieldFocused = false
             }
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .animation(reduceMotion ? .none : .default, value: isSearchFieldFocused)
+        .animation(reduceMotion ? .none : .snappy, value: isSearchFieldFocused)
         .onChange(of: stationName) { _, newValue in
+            // Update results instantly on each keystroke — this is a keyboard-initiated,
+            // high-frequency action, so it must not animate (speed is the feature). The
+            // container's appear/disappear is still animated via `isSearchFieldFocused`.
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            withAnimation(reduceMotion ? .none : .default) {
-                if trimmed.isEmpty {
-                    filteredStations = []
-                } else {
-                    filteredStations = SiteStore.shared.search(query: trimmed)
-                }
+            if trimmed.isEmpty {
+                filteredStations = []
+            } else {
+                filteredStations = SiteStore.shared.search(query: trimmed)
             }
         }
     }
@@ -263,14 +308,21 @@ struct ContentView: View {
     /// The main content section showing departures or status
     private var contentSection: some View {
         VStack {
-            if viewModel.isLoading {
+            if !viewModel.departures.isEmpty {
+                // Keep the last-known list visible while refreshing or after a failed
+                // refresh — surface any error as a calm inline banner, never a wall.
+                VStack(spacing: 0) {
+                    if let errorMessage = viewModel.errorMessage {
+                        errorBanner(message: errorMessage)
+                    }
+                    departuresList
+                }
+                .transition(.opacity)
+            } else if viewModel.isLoading {
                 loadingView
                     .transition(.opacity)
             } else if let errorMessage = viewModel.errorMessage {
                 errorView(message: errorMessage)
-                    .transition(.opacity)
-            } else if !viewModel.departures.isEmpty {
-                departuresList
                     .transition(.opacity)
             } else if !viewModel.currentStation.isEmpty {
                 noDeparturesView
@@ -279,8 +331,9 @@ struct ContentView: View {
                 Spacer()
             }
         }
-        .animation(reduceMotion ? .none : .default, value: viewModel.isLoading)
-        .animation(reduceMotion ? .none : .default, value: viewModel.departures.isEmpty)
+        .animation(reduceMotion ? .none : .snappy, value: viewModel.isLoading)
+        .animation(reduceMotion ? .none : .snappy, value: viewModel.departures.isEmpty)
+        .animation(reduceMotion ? .none : .snappy, value: viewModel.errorMessage)
         .padding(.top, 16)
     }
 
@@ -289,25 +342,25 @@ struct ContentView: View {
         VStack(spacing: 20) {
             ProgressView()
                 .scaleEffect(1.3)
-                .tint(.blue)
+                .tint(.slAccent)
 
             Text("Loading departures...")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-                .opacity(0.8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Error message display
+    /// Full-screen state shown only when there's nothing else to display.
+    /// Kept calm — a transient signal blip shouldn't read as a system failure.
     private func errorView(message: String) -> some View {
         VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: "wifi.exclamationmark")
                 .font(.largeTitle)
-                .foregroundStyle(.orange)
+                .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
 
-            Text("Error")
+            Text("Couldn't load departures")
                 .font(.headline)
 
             Text(message)
@@ -321,6 +374,37 @@ struct ContentView: View {
             .buttonStyle(.bordered)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Calm inline banner shown above still-visible departures when a refresh fails,
+    /// so the rider keeps the times already on screen.
+    private func errorBanner(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Spacer(minLength: 8)
+
+            Button("Retry") {
+                refreshDepartures()
+            }
+            .font(.footnote.weight(.semibold))
+            .buttonStyle(.plain)
+            .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .combine)
     }
 
     /// Filter pills for transport modes (only shown when 2+ modes available)
@@ -345,19 +429,20 @@ struct ContentView: View {
                 isSelected: selectedTransportFilter == nil,
                 invertSelection: true
             ) {
-                withAnimation {
+                withAnimation(reduceMotion ? .none : .snappy) {
                     selectedTransportFilter = nil
                 }
             }
 
             ForEach(availableTransportModes, id: \.self) { mode in
+                let transportMode = TransportMode(code: mode)
                 FilterPillButton(
-                    label: transportModeName(for: mode),
-                    icon: transportModeIcon(for: mode),
-                    color: transportModeColor(for: mode),
+                    label: transportMode.displayName,
+                    icon: transportMode.icon,
+                    color: transportMode.tint,
                     isSelected: selectedTransportFilter == mode
                 ) {
-                    withAnimation {
+                    withAnimation(reduceMotion ? .none : .snappy) {
                         selectedTransportFilter = mode
                     }
                 }
@@ -379,22 +464,34 @@ struct ContentView: View {
         VStack(spacing: 0) {
             transportFilterPills
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredDepartures, id: \.id) { departure in
-                            DepartureRowView(departure: departure)
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .id(departure.id)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredDepartures, id: \.id) { departure in
+                        DepartureRowView(departure: departure)
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            // Fade rows in/out when the transport filter changes,
+                            // instead of popping. Gated for Reduce Motion.
+                            .transition(reduceMotion ? .identity : .opacity)
 
-                            if departure.id != filteredDepartures.last?.id {
-                                Divider()
-                                    .padding(.leading)
-                            }
+                        if departure.id != filteredDepartures.last?.id {
+                            Divider()
+                                .padding(.leading)
                         }
                     }
+
+                    if let updated = viewModel.lastUpdated {
+                        Text("Updated \(updated, format: .dateTime.hour().minute())")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 16)
+                            .padding(.bottom, 8)
+                    }
                 }
+            }
+            .refreshable {
+                await viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: viewModel.currentStation)
             }
         }
     }
@@ -444,7 +541,7 @@ struct ContentView: View {
     private var pinnedStationsView: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Pinned Stations")
+                Text("Pinned stations")
                     .font(.title2)
                     .fontWeight(.semibold)
                 Spacer()
@@ -491,39 +588,6 @@ struct ContentView: View {
 
     // MARK: - Transport Mode Helpers
 
-    private func transportModeIcon(for mode: String) -> String {
-        switch mode {
-        case "METRO": return "tram.fill"
-        case "TRAM": return "cablecar"
-        case "BUS": return "bus.fill"
-        case "TRAIN": return "train.side.front.car"
-        case "SHIP": return "ferry.fill"
-        default: return "questionmark.circle"
-        }
-    }
-
-    private func transportModeName(for mode: String) -> String {
-        switch mode {
-        case "METRO": return "Metro"
-        case "TRAM": return "Tram"
-        case "BUS": return "Bus"
-        case "TRAIN": return "Train"
-        case "SHIP": return "Ferry"
-        default: return mode
-        }
-    }
-
-    private func transportModeColor(for mode: String) -> Color {
-        switch mode {
-        case "METRO": return .blue
-        case "TRAM": return .orange
-        case "BUS": return .indigo
-        case "TRAIN": return .purple
-        case "SHIP": return .teal
-        default: return .gray
-        }
-    }
-
     /// Ordered list of transport modes present in current departures
     private var availableTransportModes: [String] {
         let modeOrder = ["METRO", "TRAM", "BUS", "TRAIN", "SHIP"]
@@ -550,12 +614,7 @@ struct ContentView: View {
         stationName = name
         isSearchMode = true
 
-        selectStationTask?.cancel()
-        selectStationTask = Task {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            guard !Task.isCancelled else { return }
-            searchDepartures()
-        }
+        searchDepartures()
     }
 
     /// Selects a pinned station
@@ -577,17 +636,11 @@ struct ContentView: View {
         viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: trimmedName)
     }
 
-    /// Resets the search and returns to initial state
-    private func resetSearch() {
-        isSearchFieldFocused = false
-        filteredStations = []
-        isSearchMode = false
-    }
-
     /// Refreshes the current departures by calling the API again
     private func refreshDepartures() {
         selectedTransportFilter = nil
         guard !viewModel.currentSiteID.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: viewModel.currentStation)
     }
 
@@ -610,7 +663,7 @@ struct ContentView: View {
             easterEggTapCount = 0 // Reset for next time
 
             // Show thank you screen
-            withAnimation {
+            withAnimation(reduceMotion ? .none : .default) {
                 showingThankYou = true
             }
         }
@@ -627,8 +680,6 @@ struct PinnedStationRow: View {
     let onTap: () -> Void
     let onUnpin: () -> Void
 
-    @State private var isPressed = false
-
     var body: some View {
         Button(action: {
             // Add haptic feedback
@@ -638,13 +689,12 @@ struct PinnedStationRow: View {
         }) {
             HStack(spacing: 16) {
                 // Station icon based on transport modes
-                Image(systemName: stationIcon)
-                    .foregroundStyle(stationIconColor)
+                Image(systemName: primaryMode.icon)
+                    .foregroundStyle(primaryMode.tint)
                     .font(.body.weight(.medium))
                     .frame(width: 28, height: 28)
                     .background(Color(.systemGray5))
                     .clipShape(.rect(cornerRadius: 6))
-                    .scaleEffect(isPressed ? 0.95 : 1.0)
 
                 // Station name
                 Text(station.name)
@@ -658,20 +708,12 @@ struct PinnedStationRow: View {
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isPressed ? 5 : 0))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .contentShape(Rectangle())
-            .scaleEffect(isPressed ? 0.98 : 1.0)
-            .opacity(isPressed ? 0.8 : 1.0)
         }
-        .buttonStyle(PlainButtonStyle())
-        .onLongPressGesture(minimumDuration: 0.01, maximumDistance: .infinity, pressing: { isPressing in
-            withAnimation {
-                isPressed = isPressing
-            }
-        }, perform: {})
+        .buttonStyle(PressableRowStyle())
         .swipeActions(edge: .trailing) {
             Button("Unpin") {
                 onUnpin()
@@ -685,58 +727,9 @@ struct PinnedStationRow: View {
         }
     }
 
-    private var stationIcon: String {
-        let modes = station.transportModes
-        if modes.contains("METRO") || modes.isEmpty { return "tram.fill" }
-        if modes.count == 1, let mode = modes.first {
-            switch mode {
-            case "TRAM": return "cablecar"
-            case "BUS": return "bus.fill"
-            case "TRAIN": return "train.side.front.car"
-            case "SHIP": return "ferry.fill"
-            default: return "tram.fill"
-            }
-        }
-        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
-        for mode in priority {
-            if modes.contains(mode) {
-                switch mode {
-                case "TRAM": return "cablecar"
-                case "BUS": return "bus.fill"
-                case "TRAIN": return "train.side.front.car"
-                case "SHIP": return "ferry.fill"
-                default: break
-                }
-            }
-        }
-        return "tram.fill"
-    }
-
-    private var stationIconColor: Color {
-        let modes = station.transportModes
-        if modes.contains("METRO") || modes.isEmpty { return .blue }
-        if modes.count == 1, let mode = modes.first {
-            switch mode {
-            case "TRAM": return .orange
-            case "BUS": return .indigo
-            case "TRAIN": return .purple
-            case "SHIP": return .teal
-            default: return .blue
-            }
-        }
-        let priority = ["TRAIN", "TRAM", "BUS", "SHIP"]
-        for mode in priority {
-            if modes.contains(mode) {
-                switch mode {
-                case "TRAM": return .orange
-                case "BUS": return .indigo
-                case "TRAIN": return .purple
-                case "SHIP": return .teal
-                default: break
-                }
-            }
-        }
-        return .blue
+    /// The representative mode driving this row's icon + tint.
+    private var primaryMode: TransportMode {
+        slPrimaryMode(from: Set(station.transportModes))
     }
 }
 
@@ -746,17 +739,25 @@ struct PinnedStationRow: View {
 struct DepartureRowView: View {
     let departure: Departure
 
+    /// Accessibility: reduce or disable animations for motion-sensitive users
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
+        let badgeColor = slLineBadgeColor(mode: departure.line.transportMode, designation: departure.line.designation)
+        let imminent = slIsImminent(expected: departure.expected)
         HStack(spacing: 16) {
             // Line number and direction
             VStack(alignment: .leading, spacing: 6) {
                 Text(departure.line.designation)
                     .font(.callout.bold())
                     .foregroundStyle(.white)
-                    .frame(width: 36, height: 28)
-                    .background(lineColor(for: departure))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, 4)
+                    .frame(minWidth: 36, minHeight: 28)
+                    .background(badgeColor)
                     .clipShape(.rect(cornerRadius: 8))
-                    .shadow(color: lineColor(for: departure).opacity(0.3), radius: 4, x: 0, y: 2)
+                    .shadow(color: badgeColor.opacity(0.3), radius: 4, x: 0, y: 2)
 
                 Text(departure.destination)
                     .font(.subheadline.weight(.medium))
@@ -769,7 +770,11 @@ struct DepartureRowView: View {
             VStack(alignment: .trailing, spacing: 4) {
                 Text(departure.display)
                     .font(.headline)
-                    .foregroundStyle(departure.display.contains("Nu") || departure.display.contains("min") ? .orange : .blue)
+                    .foregroundStyle(imminent ? .orange : .slAccent)
+                    // Roll the digits when a refresh changes the countdown (e.g. "4 min"
+                    // → "3 min"), now that rows keep a stable identity across fetches.
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .snappy, value: departure.display)
 
                 if let platform = departure.stopPoint.designation {
                     Text("Platform \(platform)")
@@ -778,24 +783,20 @@ struct DepartureRowView: View {
                 }
             }
         }
+        // Merge the fragments into one spoken sentence for VoiceOver, and keep
+        // urgency legible without relying on colour alone.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
     }
 
-    /// Returns the appropriate color based on transport mode and line
-    private func lineColor(for departure: Departure) -> Color {
-        switch departure.line.transportMode {
-        case "METRO":
-            switch departure.line.designation {
-            case "13", "14": return .red
-            case "17", "18", "19": return .green
-            case "10", "11": return .blue
-            default: return .gray
-            }
-        case "TRAM": return .orange
-        case "BUS": return .indigo
-        case "TRAIN": return .purple
-        case "SHIP": return .teal
-        default: return .gray
+    /// A single, VoiceOver-friendly description of the whole row.
+    private var accessibilityDescription: String {
+        let time = departure.display == "Nu" ? "now" : departure.display
+        var parts = ["Line \(departure.line.designation) to \(departure.destination)", time]
+        if let platform = departure.stopPoint.designation {
+            parts.append("platform \(platform)")
         }
+        return parts.joined(separator: ", ")
     }
 
 }
@@ -828,6 +829,22 @@ struct GlassOrFillModifier: ViewModifier {
     }
 }
 
+// MARK: - Pressable Row Style
+
+/// Shared press feedback for tappable rows/pills: a subtle scale-down + dim while
+/// pressed, matching the pinned-row interaction. Reduce-Motion gated, and reused so
+/// every tappable row feels the same. Replaces ad-hoc long-press gestures.
+struct PressableRowStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: configuration.isPressed)
+    }
+}
+
 // MARK: - Filter Pill Button
 
 struct FilterPillButton: View {
@@ -854,24 +871,32 @@ struct FilterPillButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
+        Group {
             if #available(iOS 26, *) {
-                pillContent
-                    .glassEffect(
-                        isSelected ? .regular.interactive().tint(invertSelection ? Color(.label) : color) : .regular.interactive(),
-                        in: .capsule
-                    )
+                // Glass `.interactive()` already supplies its own press feedback.
+                Button(action: action) {
+                    pillContent
+                        .glassEffect(
+                            isSelected ? .regular.interactive().tint(invertSelection ? Color(.label) : color) : .regular.interactive(),
+                            in: .capsule
+                        )
+                }
+                .buttonStyle(.plain)
             } else {
-                pillContent
-                    .background(isSelected ? (invertSelection ? Color(.label) : color.opacity(0.15)) : Color(.systemGray6))
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(isSelected ? (invertSelection ? Color.clear : color.opacity(0.3)) : Color.clear, lineWidth: 1)
-                    )
+                // Fallback has no built-in press feedback — add the shared row style.
+                Button(action: action) {
+                    pillContent
+                        .background(isSelected ? (invertSelection ? Color(.label) : color.opacity(0.15)) : Color(.systemGray6))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(isSelected ? (invertSelection ? Color.clear : color.opacity(0.3)) : Color.clear, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(PressableRowStyle())
             }
         }
-        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -965,10 +990,10 @@ struct ThankYouView: View {
                     Spacer()
 
                     VStack(spacing: 8) {
-                        Text("Dedicated to all my friends in Berlin.")
+                        Text("Dedicated to my friend Adam.")
                             .font(.body)
                             .foregroundStyle(.secondary)
-                        Text("I miss you.")
+                        Text("Thank you for testing this app early and helping me build it.")
                             .font(.body)
                             .foregroundStyle(.secondary)
                     }
@@ -977,7 +1002,7 @@ struct ThankYouView: View {
 
                     // Simple close text
                     Button("Close") {
-                        withAnimation {
+                        withAnimation(UIAccessibility.isReduceMotionEnabled ? .none : .default) {
                             isVisible = false
                         }
                     }
