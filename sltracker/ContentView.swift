@@ -47,8 +47,7 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
 
-    /// Tracked tasks for proper cancellation
-    @State private var selectStationTask: Task<Void, Never>?
+    /// Tracked task for proper cancellation of the easter-egg reset timer
     @State private var easterEggResetTask: Task<Void, Never>?
 
     // Station data is now loaded from all_sites.json via SiteStore
@@ -106,6 +105,7 @@ struct ContentView: View {
                                 }
                                 .tint(.primary)
                                 .accessibilityLabel("Refresh departures")
+                                .disabled(viewModel.isLoading)
                             }
                         }
                     }
@@ -219,6 +219,22 @@ struct ContentView: View {
         .scrollDismissesKeyboard(.interactively)
     }
 
+    /// Shown when the typed query matches no stations.
+    private var noSearchResultsView: some View {
+        VStack(spacing: 8) {
+            Text("No stations found")
+                .font(.headline)
+
+            Text("Check the spelling, or try the Swedish name.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 48)
+        .padding(.horizontal)
+    }
+
     /// Home screen view
     private var homeScreenView: some View {
         VStack(spacing: 0) {
@@ -227,6 +243,9 @@ struct ContentView: View {
             if isSearchFieldFocused && !filteredStations.isEmpty {
                 searchSuggestionsView
                     .padding(.top, 8)
+                    .transition(.opacity)
+            } else if isSearchFieldFocused && !stationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                noSearchResultsView
                     .transition(.opacity)
             } else if !isSearchFieldFocused {
                 Group {
@@ -433,19 +452,16 @@ struct ContentView: View {
         VStack(spacing: 0) {
             transportFilterPills
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredDepartures, id: \.id) { departure in
-                            DepartureRowView(departure: departure)
-                                .padding(.horizontal)
-                                .padding(.vertical, 8)
-                                .id(departure.id)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredDepartures, id: \.id) { departure in
+                        DepartureRowView(departure: departure)
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
 
-                            if departure.id != filteredDepartures.last?.id {
-                                Divider()
-                                    .padding(.leading)
-                            }
+                        if departure.id != filteredDepartures.last?.id {
+                            Divider()
+                                .padding(.leading)
                         }
                     }
                 }
@@ -604,12 +620,7 @@ struct ContentView: View {
         stationName = name
         isSearchMode = true
 
-        selectStationTask?.cancel()
-        selectStationTask = Task {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            guard !Task.isCancelled else { return }
-            searchDepartures()
-        }
+        searchDepartures()
     }
 
     /// Selects a pinned station
@@ -629,13 +640,6 @@ struct ContentView: View {
 
         filteredStations = []
         viewModel.fetchDepartures(for: viewModel.currentSiteID, stationName: trimmedName)
-    }
-
-    /// Resets the search and returns to initial state
-    private func resetSearch() {
-        isSearchFieldFocused = false
-        filteredStations = []
-        isSearchMode = false
     }
 
     /// Refreshes the current departures by calling the API again
