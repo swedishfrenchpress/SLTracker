@@ -6,6 +6,11 @@ build/
 .DS_Store
 *.log
 
+# Xcode per-user state (not project files)
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
 # AI coding-tool caches (not project files)
 .codebuddy/
 .commandcode/
